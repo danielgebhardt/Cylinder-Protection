@@ -1,43 +1,89 @@
-name: Android APK
+name: Android app
 
+# Builds the sideloadable Android app, keeps the APK as an artifact and, for main,
+# publishes it at a fixed link anyone can install from:
+# https://github.com/danielgebhardt/Cylinder-Protection/releases/download/latest/cylinder-protection.apk
 on:
   push:
     branches: [main]
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  build:
-    runs-on: ubuntu-latest
+  apk:
+    name: Build the debug APK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v5
-
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
-
-      - uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: 21
-
-      - name: Install dependencies
+      - name: Install frozen dependencies
         run: npm ci
-
-      - name: Typecheck & build web bundle
-        run: npm run build
-
-      - name: Sync Capacitor
-        run: npx cap sync android
-
-      - name: Build debug APK
+      - name: Typecheck, build the web bundle and sync it into the Android project
+        run: npm run cap:sync
+      - name: Assemble the APK
         working-directory: android
+        # The runner image ships JDK 21 and the Android SDK; Capacitor needs 21, but the
+        # default JDK is older. The runner's JAVA_HOME_21_X64 is only visible in the shell.
         run: |
+          test -n "$JAVA_HOME_21_X64" || { echo "The runner has no JDK 21"; exit 1; }
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
-
-      - uses: actions/upload-artifact@v5
+          JAVA_HOME="$JAVA_HOME_21_X64" ./gradlew assembleDebug --no-daemon
+      - name: Keep the APK
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: cylinder-protection-debug-apk
+          name: cylinder-protection-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
+
+  publish:
+    name: Publish the APK at the fixed download link
+    needs: apk
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    # Only this job may write: it moves the `latest` tag and replaces the release's APK.
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Point the latest pre-release at this build
+        run: |
+          set -euo pipefail
+          gh run download "$GITHUB_RUN_ID" --name cylinder-protection-apk --dir apk
+          mv apk/app-debug.apk cylinder-protection.apk
+          # The tag follows main; a pre-release keeps any future versioned releases as "Latest".
+          if gh api "repos/$GH_REPO/git/refs/tags/latest" > /dev/null 2>&1; then
+            gh api -X PATCH "repos/$GH_REPO/git/refs/tags/latest" \
+              -f sha="$GITHUB_SHA" -F force=true > /dev/null
+          else
+            gh api -X POST "repos/$GH_REPO/git/refs" \
+              -f ref=refs/tags/latest -f sha="$GITHUB_SHA" > /dev/null
+          fi
+          notes="Cylinder Protection for Android, built from main at ${GITHUB_SHA::7}.
+
+          To install, open this link on an Android phone, then open the downloaded file and allow installs from your browser when asked:
+          https://github.com/$GH_REPO/releases/download/latest/cylinder-protection.apk
+
+          A newer build installs over an older one and keeps your stars and progress."
+          if gh release view latest > /dev/null 2>&1; then
+            gh release edit latest --notes "$notes"
+          else
+            gh release create latest --title "Android app (latest build)" \
+              --notes "$notes" --prerelease --latest=false
+          fi
+          gh release upload latest cylinder-protection.apk --clobber

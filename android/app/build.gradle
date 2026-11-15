@@ -16,7 +16,21 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // A fixed key for sideloaded builds, committed on purpose: every APK, local or CI, is
+    // signed alike, so a new build installs over the old one and keeps saved progress.
+    // It is not a store-release key.
+    signingConfigs {
+        sideload {
+            storeFile file('sideload.keystore')
+            storePassword 'cylinderprotection'
+            keyAlias 'sideload'
+            keyPassword 'cylinderprotection'
+        }
+    }
     buildTypes {
+        debug {
+            signingConfig signingConfigs.sideload
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'

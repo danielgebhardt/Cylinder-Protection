@@ -58,8 +58,14 @@ npm run cap:open     # open in Android Studio (then Run ▶)
 npm run android      # build, sync and run on a connected device/emulator
 ```
 
-Every push to `main` also builds a **debug APK** in GitHub Actions
-(*Actions → Android APK → latest run → Artifacts*), which you can install directly on a phone.
+**Install on a phone:** open this link on Android, then open the downloaded file and allow installs from
+your browser when asked — no GitHub sign-in needed:
+<https://github.com/danielgebhardt/Cylinder-Protection/releases/download/latest/cylinder-protection.apk>
+
+The **Android app** workflow rebuilds that APK on every push to `main` (and keeps it as the
+`cylinder-protection-apk` artifact). Every build is signed with the committed sideload key
+(`android/app/sideload.keystore`), so a new APK installs over the old one and keeps your progress.
+That key is only for sideloading, never for a Play Store release.
 
 App icon and splash sources live in `assets/`; regenerate the Android resources with
 `npx capacitor-assets generate --android`.
