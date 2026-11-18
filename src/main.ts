@@ -1,7 +1,7 @@
 import * as Phaser from 'phaser';
 import { App } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
-import { W, H } from './config';
+import { W, H, RES } from './config';
 import { BootScene } from './scenes/BootScene';
 import { MenuScene } from './scenes/MenuScene';
 import { GameScene } from './scenes/GameScene';
@@ -9,8 +9,8 @@ import { GameScene } from './scenes/GameScene';
 const game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: 'game',
-  width: W,
-  height: H,
+  width: Math.round(W * RES),
+  height: Math.round(H * RES),
   backgroundColor: '#1b2a1a',
   scale: {
     mode: Phaser.Scale.FIT,

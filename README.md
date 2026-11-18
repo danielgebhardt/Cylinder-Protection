@@ -4,7 +4,9 @@ A fantasy tower-defense game for Android (and the browser). The Warlord's horde 
 **Cylinder** — build towers along the road, upgrade them, pick specializations, and hold the line.
 
 Built with **TypeScript + Phaser 4 + Vite**, packaged for Android with **Capacitor 8**.
-All art and sound are generated in code — there are no image or audio asset files.
+All art and sound are generated in code — there are no image or audio asset files. Sprites are painted
+with Canvas2D (gradients, outlines, highlights) at the device's real pixel density, so they stay sharp on
+high-resolution phone screens, and every unit has walk and attack animations.
 
 ## Features
 
@@ -49,6 +51,7 @@ Handy URL parameters while developing:
 
 - `?level=2` — jump straight into a level (0-based)
 - `?debug` — start with lots of gold
+- `?res=2` — force the render scale (normally picked from the screen's pixel density)
 
 ## Android
 
@@ -78,7 +81,9 @@ src/
   config.ts            screen size, depth layers, HUD zones
   audio.ts             synthesized WebAudio sound effects
   save.ts              localStorage progress (stars, seen enemies, mute)
-  art/textures.ts      every sprite, drawn procedurally at boot
+  art/                 every sprite, painted procedurally at boot
+    draw.ts            Canvas2D toolkit + hi-res texture registration
+    towers.ts units.ts world.ts fx.ts
   data/
     enemies.ts         enemy stats & tips
     towers.ts          tower tree, specializations and skills

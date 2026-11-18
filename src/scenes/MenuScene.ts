@@ -1,7 +1,9 @@
 import * as Phaser from 'phaser';
-import { W, H } from '../config';
+import { W, H, setupCamera } from '../config';
+import { paintWorldMap } from '../art/world';
 import { LEVELS } from '../data/levels';
 import { ENEMIES } from '../data/enemies';
+import { ENEMY_TEX } from '../art/textures';
 import { button, iconButton, panel } from '../ui/widgets';
 import { seeded, txt } from '../util';
 import { isUnlocked, load, resetProgress, totalStars } from '../save';
@@ -21,6 +23,8 @@ export class MenuScene extends Phaser.Scene {
   }
 
   create(): void {
+    setupCamera(this);
+    this.anims.globalTimeScale = 1;
     this.drawMap();
     const title = txt(this, W / 2, 62, 'Cylinder Protection', { size: 58, color: '#ffe26a', stroke: '#3b2a1a', strokeThickness: 10 });
     this.tweens.add({ targets: title, scale: 1.03, duration: 1600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
@@ -59,44 +63,38 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private drawMap(): void {
-    if (!this.textures.exists('worldmap')) {
-      const g = new Phaser.GameObjects.Graphics(this);
-      const rng = seeded(99);
-      g.fillStyle(0x2f6f8f); g.fillRect(0, 0, W, H);
-      for (let i = 0; i < 60; i++) { g.fillStyle(0x3f87a8, 0.4); g.fillEllipse(rng() * W, rng() * H, 60 + rng() * 120, 8 + rng() * 10); }
-      // land
-      const land = [[640, 420, 1180, 560], [300, 380, 520, 420], [980, 380, 520, 420]] as const;
-      g.fillStyle(0xd9c38f); for (const [x, y, w, h] of land) g.fillEllipse(x, y, w + 30, h + 30);
-      g.fillStyle(0x7fae4c); for (const [x, y, w, h] of land) g.fillEllipse(x, y, w, h);
-      // regions
-      const regions: [number, number, number][] = [[210, 470, 0x6fa64a], [430, 330, 0xa7a24a], [660, 470, 0x4f7a4a], [870, 300, 0xdfe8ef], [1070, 460, 0x6e5a52]];
-      for (const [x, y, c] of regions) { g.fillStyle(c, 0.85); g.fillEllipse(x, y, 280, 200); }
-      for (let i = 0; i < 90; i++) {
-        const x = 120 + rng() * (W - 240), y = 230 + rng() * 420;
-        g.fillStyle(0x2f6e3a, 0.8); g.fillTriangle(x - 8, y + 8, x + 8, y + 8, x, y - 10);
-      }
-      for (let i = 0; i < 12; i++) {
-        const x = 780 + rng() * 200, y = 210 + rng() * 120;
-        g.fillStyle(0x8a8a9a); g.fillTriangle(x - 22, y + 18, x + 22, y + 18, x, y - 24);
-        g.fillStyle(0xffffff); g.fillTriangle(x - 8, y - 9, x + 8, y - 9, x, y - 24);
-      }
-      // trail
-      const pts = LEVELS.map(l => l.mapPos);
-      for (let i = 0; i < pts.length - 1; i++) {
-        const [ax, ay] = pts[i], [bx, by] = pts[i + 1];
-        for (let t = 0; t <= 1; t += 0.04) {
-          g.fillStyle(0x5a3a22, 0.8);
-          g.fillCircle(ax + (bx - ax) * t, ay + (by - ay) * t + Math.sin(t * Math.PI) * -30, 3.5);
-        }
-      }
-      // vignette
-      for (let i = 0; i < 8; i++) { g.lineStyle(24, 0x000000, 0.08); g.strokeRect(i * 12, i * 12, W - i * 24, H - i * 24); }
-      g.generateTexture('worldmap', W, H);
-      g.destroy();
-    }
+    if (!this.textures.exists('worldmap')) paintWorldMap(this, LEVELS.map(l => l.mapPos));
     this.add.image(0, 0, 'worldmap').setOrigin(0);
-    const cyl = this.add.image(1180, 300, 'cylinder').setScale(0.7);
-    this.tweens.add({ targets: cyl, y: 292, duration: 1800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    // scenery per region
+    const rng = seeded(7);
+    const regionDecor: [number, number, string[]][] = [
+      [210, 470, ['tree', 'tree', 'bush', 'pine']], [430, 330, ['autumn', 'autumn', 'tree']], [660, 470, ['deadtree', 'pine', 'crystal']],
+      [870, 300, ['snowpine', 'snowpine']], [1070, 460, ['deadtree', 'rock', 'lava']],
+    ];
+    const items: { x: number; y: number; k: string }[] = [];
+    for (const [cx, cy, kinds] of regionDecor) {
+      for (let i = 0; i < 9; i++) {
+        const a = rng() * Math.PI * 2, r = 60 + rng() * 70;
+        const x = cx + Math.cos(a) * r * 1.2, y = cy + Math.sin(a) * r * 0.75;
+        if (LEVELS.some(l => Math.hypot(l.mapPos[0] - x, l.mapPos[1] - y) < 70)) continue;
+        items.push({ x, y, k: kinds[Math.floor(rng() * kinds.length)] });
+      }
+    }
+    items.sort((a, b) => a.y - b.y).forEach(it => {
+      const img = this.add.image(it.x, it.y, `decor_${it.k}`).setOrigin(0.5, 66 / 72).setScale(0.55);
+      if (it.k !== 'rock' && it.k !== 'lava' && it.k !== 'crystal') this.tweens.add({ targets: img, angle: { from: -1.5, to: 1.5 }, duration: 1800 + rng() * 1200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    });
+    // the Cylinder, glowing on its hill
+    const glow = this.add.image(1180, 280, 'glow').setBlendMode(Phaser.BlendModes.ADD).setTint(0x5ad0ff).setScale(2.4).setAlpha(0.5);
+    this.tweens.add({ targets: glow, scale: 2.9, alpha: 0.25, duration: 1500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    const cyl = this.add.image(1180, 330, 'cylinder').setOrigin(0.5, 132 / 140).setScale(0.75);
+    this.tweens.add({ targets: cyl, y: 324, duration: 1800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    // drifting clouds
+    for (let i = 0; i < 5; i++) {
+      const c = this.add.image(rng() * W, 160 + rng() * 480, 'smoke').setScale(4 + rng() * 3, 1.6 + rng()).setAlpha(0.35).setDepth(5);
+      this.tweens.add({ targets: c, x: c.x + 160, duration: 14000 + rng() * 8000, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    }
+    this.add.image(0, 0, 'vignette').setOrigin(0).setDisplaySize(W, H).setDepth(6);
   }
 
   private drawNodes(): void {
@@ -151,8 +149,8 @@ export class MenuScene extends Phaser.Scene {
     const sp = Math.min(80, 520 / keys.length);
     keys.forEach((k, j) => {
       const ex = W / 2 + (j - (keys.length - 1) / 2) * sp;
-      const img = this.add.image(ex, H / 2 + 14, `enemy_${k}`);
-      img.setScale(Math.min(1.2, 54 / Math.max(img.width, img.height)));
+      const img = this.add.image(ex, H / 2 + 14, `enemy_${k}_0`);
+      img.setOrigin(0.5, 0.7).setScale(Math.min(1.6, 44 / ENEMY_TEX[k].body));
       c.add(img);
       c.add(txt(this, ex, H / 2 + 50, ENEMIES[k].short, { size: 12, strokeThickness: 3 }));
     });

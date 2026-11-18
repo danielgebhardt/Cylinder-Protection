@@ -1,5 +1,6 @@
 import * as Phaser from 'phaser';
-import { W, H, DEPTH, HUD_ZONES } from '../config';
+import { W, H, DEPTH, HUD_ZONES, setupCamera } from '../config';
+import { paintMap } from '../art/world';
 import { LEVELS } from '../data/levels';
 import type { LevelDef } from '../data/levels';
 import { ENEMIES } from '../data/enemies';
@@ -26,7 +27,7 @@ const METEOR_CD = 50;
 const REINFORCE_CD = 22;
 
 interface QueuedSpawn { t: number; key: string; path: number }
-interface Fire { x: number; y: number; r: number; dps: number; t: number; gfx: Phaser.GameObjects.Ellipse; sparkT: number }
+interface Fire { x: number; y: number; r: number; dps: number; t: number; gfx: Phaser.GameObjects.Image; sparkT: number }
 interface CallButton { c: Phaser.GameObjects.Container; ring: Phaser.GameObjects.Graphics; path: number }
 
 const SKILL_TINT: Record<string, number> = {
@@ -94,6 +95,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   create(): void {
+    setupCamera(this);
+    this.anims.globalTimeScale = 1;
     this.level = LEVELS[this.levelIndex];
     this.paths = this.level.paths.map(p => new PathLine(p));
     this.towers = []; this.enemies = []; this.soldiers = []; this.projectiles = []; this.fires = [];
@@ -118,6 +121,7 @@ export class GameScene extends Phaser.Scene {
     this.spots = spotPts.map(p => ({ x: p.x, y: p.y, tower: null, image: this.add.image(p.x, p.y, 'spot').setDepth(DEPTH.spots) }));
     this.placeDecor();
     this.placeCylinder();
+    this.addAmbience();
 
     this.rangeGfx = this.add.graphics().setDepth(DEPTH.range);
     this.buildHud();
@@ -151,44 +155,9 @@ export class GameScene extends Phaser.Scene {
 
   private drawMap(): void {
     const key = `map_${this.levelIndex}`;
-    if (!this.textures.exists(key)) {
-      const th = this.level.theme;
-      const rng = seeded(this.level.seed * 7 + 3);
-      const g = new Phaser.GameObjects.Graphics(this);
-      g.fillStyle(th.ground); g.fillRect(0, 0, W, H);
-      for (let i = 0; i < 140; i++) {
-        g.fillStyle(rng() < 0.5 ? th.groundDark : th.groundLight, 0.35 + rng() * 0.3);
-        g.fillEllipse(rng() * W, rng() * H, 40 + rng() * 140, 20 + rng() * 60);
-      }
-      for (let i = 0; i < 500; i++) {
-        const x = rng() * W, y = rng() * H;
-        g.lineStyle(1.5, rng() < 0.5 ? th.groundDark : th.groundLight, 0.8);
-        g.lineBetween(x, y, x - 2, y - 5); g.lineBetween(x + 2, y, x + 3, y - 6);
-      }
-      const all = this.paths;
-      const layer = (r: number, color: number, alpha = 1) => {
-        g.fillStyle(color, alpha);
-        for (const p of all) for (let i = 0; i < p.pts.length; i += 3) g.fillCircle(p.pts[i].x, p.pts[i].y, r);
-      };
-      layer(31, th.pathEdge, 0.5);
-      layer(27, th.pathEdge);
-      layer(23, th.path);
-      layer(12, 0xffffff, 0.06);
-      for (const p of all) {
-        for (let i = 0; i < p.pts.length; i += 9) {
-          const pt = p.pts[i];
-          g.fillStyle(rng() < 0.5 ? th.pathEdge : 0xffffff, 0.35);
-          g.fillCircle(pt.x + (rng() - 0.5) * 36, pt.y + (rng() - 0.5) * 36, 1.5 + rng() * 2);
-        }
-      }
-      // vignette
-      for (let i = 0; i < 6; i++) {
-        g.lineStyle(26, 0x000000, 0.07);
-        g.strokeRect(i * 13, i * 13, W - i * 26, H - i * 26);
-      }
-      g.generateTexture(key, W, H);
-      g.destroy();
-    }
+    // keep only the current level's full-screen map in GPU memory
+    for (const k of this.textures.getTextureKeys()) if (k.startsWith('map_') && k !== key) this.textures.remove(k);
+    if (!this.textures.exists(key)) paintMap(this, key, this.level.theme, this.paths.map(p => p.pts), this.level.seed * 7 + 3);
     this.add.image(0, 0, key).setOrigin(0).setDepth(DEPTH.ground);
   }
 
@@ -206,18 +175,74 @@ export class GameScene extends Phaser.Scene {
       if (rectsContain(HUD_ZONES, x, y, 6)) continue;
       if (placed.some(p => dist(p.x, p.y, x, y) < 34)) continue;
       placed.push({ x, y });
-      const img = this.add.image(x, y, `decor_${kind}`).setOrigin(0.5, 0.9).setScale(0.8 + rng() * 0.4);
+      const img = this.add.image(x, y, `decor_${kind}`).setOrigin(0.5, 66 / 72).setScale(0.8 + rng() * 0.4);
       if (rng() < 0.5) img.setFlipX(true);
       img.setDepth(kind === 'flower' || kind === 'lava' ? DEPTH.spots - 1 : DEPTH.world + y);
+      // gentle wind sway for plants
+      if (kind === 'tree' || kind === 'autumn' || kind === 'pine' || kind === 'snowpine' || kind === 'bush') {
+        this.tweens.add({ targets: img, angle: { from: -1.4, to: 1.4 }, duration: 1600 + rng() * 1400, yoyo: true, repeat: -1, ease: 'Sine.easeInOut', delay: rng() * 1500 });
+      }
+      if (kind === 'crystal' || kind === 'lava') {
+        const g = this.add.image(x, y - 14, 'glow').setBlendMode(Phaser.BlendModes.ADD).setTint(kind === 'lava' ? 0xff7a2a : 0x6ad0ff).setScale(0.9).setAlpha(0.35).setDepth(img.depth + 1);
+        this.tweens.add({ targets: g, alpha: 0.12, scale: 1.1, duration: 1200 + rng() * 800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      }
     }
   }
 
   private placeCylinder(): void {
     const { x, y } = this.endPt;
-    const glow = this.add.circle(x, y - 50, 60, 0x5ad0ff, 0.18).setDepth(DEPTH.world + y - 1);
-    this.tweens.add({ targets: glow, scale: 1.25, alpha: 0.06, duration: 1400, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-    this.cylinder = this.add.image(x, y + 12, 'cylinder').setOrigin(0.5, 0.92).setDepth(DEPTH.world + y + 12);
+    const ADD = Phaser.BlendModes.ADD;
+    const d = DEPTH.world + y + 12;
+    const glow = this.add.image(x, y - 60, 'glow').setBlendMode(ADD).setTint(0x5ad0ff).setScale(3.2).setAlpha(0.45).setDepth(d - 1);
+    this.tweens.add({ targets: glow, scale: 3.8, alpha: 0.25, duration: 1400, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    const beam = this.add.image(x, y - 150, 'glow').setBlendMode(ADD).setTint(0x9feaff).setScale(0.7, 5).setAlpha(0.22).setDepth(d + 1);
+    this.tweens.add({ targets: beam, alpha: 0.1, scaleX: 0.55, duration: 2000, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    this.cylinder = this.add.image(x, y + 12, 'cylinder').setOrigin(0.5, 132 / 140).setDepth(d);
     this.tweens.add({ targets: this.cylinder, y: y + 8, duration: 1800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    this.add.particles(x, y - 60, 'spark', {
+      x: { min: -28, max: 28 }, y: { min: -40, max: 50 }, speedY: { min: -30, max: -12 }, speedX: { min: -6, max: 6 },
+      lifespan: 1600, scale: { start: 0.9, end: 0 }, alpha: { start: 1, end: 0 }, tint: [0x9feaff, 0xffffff, 0x5ad0ff],
+      blendMode: 'ADD', frequency: 120,
+    }).setDepth(d + 2);
+  }
+
+  /** Weather, drifting cloud shadows and a soft vignette. */
+  private addAmbience(): void {
+    const amb = this.level.theme.ambient;
+    const top = DEPTH.effects + 40;
+    const common = { blendMode: 'ADD' as const };
+    if (amb === 'pollen') {
+      this.add.particles(0, 0, 'spark', { ...common, x: { min: 0, max: W }, y: { min: 0, max: H }, lifespan: 6000, speedX: { min: 6, max: 18 }, speedY: { min: -8, max: 4 },
+        scale: { start: 0.5, end: 0.2 }, alpha: { start: 0, end: 0.8, ease: 'Sine.easeInOut' }, tint: [0xfff6b0, 0xffffff], frequency: 160 }).setDepth(top);
+    } else if (amb === 'leaves') {
+      this.add.particles(0, 0, 'leaf', { x: { min: -50, max: W }, y: -20, lifespan: 9000, speedX: { min: 15, max: 45 }, speedY: { min: 35, max: 60 },
+        rotate: { min: 0, max: 360 }, scale: { min: 0.7, max: 1.2 }, alpha: { start: 1, end: 0.6 }, frequency: 380 }).setDepth(top);
+    } else if (amb === 'fireflies') {
+      this.add.particles(0, 0, 'glow', { ...common, x: { min: 0, max: W }, y: { min: 60, max: H }, lifespan: 4000, speedX: { min: -10, max: 10 }, speedY: { min: -12, max: 6 },
+        scale: { start: 0.14, end: 0.06 }, alpha: { start: 0, end: 1, ease: 'Sine.easeInOut' }, tint: [0xd8ff6a, 0xfff07a], frequency: 220 }).setDepth(top);
+      for (let i = 0; i < 4; i++) {
+        const fog = this.add.image(Math.random() * W, 120 + Math.random() * (H - 200), 'smoke').setScale(10, 4).setAlpha(0.09).setTint(0xdfffe8).setDepth(top - 1);
+        this.tweens.add({ targets: fog, x: fog.x + 200, duration: 20000 + i * 4000, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      }
+    } else if (amb === 'snow') {
+      this.add.particles(0, 0, 'snowflake', { x: { min: -100, max: W }, y: -10, lifespan: 9000, speedX: { min: 5, max: 30 }, speedY: { min: 40, max: 75 },
+        scale: { min: 0.4, max: 1.1 }, alpha: { min: 0.6, max: 1 }, frequency: 45 }).setDepth(top);
+    } else if (amb === 'embers') {
+      this.add.particles(0, 0, 'spark', { ...common, x: { min: 0, max: W }, y: H + 10, lifespan: 7000, speedX: { min: -12, max: 12 }, speedY: { min: -70, max: -35 },
+        scale: { start: 0.7, end: 0.1 }, alpha: { start: 1, end: 0 }, tint: [0xffa22a, 0xff5a1a, 0xffd36e], frequency: 90 }).setDepth(top);
+    }
+    if (amb !== 'fireflies') {
+      for (let i = 0; i < 3; i++) {
+        const cs = this.add.image(-400 + i * 600, 150 + i * 190, 'cloudshadow').setScale(1.6).setAlpha(amb === 'embers' ? 0.16 : 0.1).setDepth(DEPTH.world - 1);
+        if (amb === 'embers') cs.setTint(0x3a1a10);
+        const drift = () => {
+          const dur = (W + 500 - cs.x) / (W + 900) * (70000 + i * 15000);
+          this.tweens.add({ targets: cs, x: W + 500, duration: dur, onComplete: () => { cs.x = -400; drift(); } });
+        };
+        drift();
+      }
+    }
+    this.add.image(0, 0, 'vignette').setOrigin(0).setDisplaySize(W, H).setDepth(top + 5);
   }
 
   /* ================================================================ */
@@ -290,9 +315,11 @@ export class GameScene extends Phaser.Scene {
     if (e.blocker) e.blocker.release();
     const gold = e.def.gold;
     this.gold += gold;
-    this.fx.floatText(e.x, e.y - 30, `+${gold}`, '#ffd23a', e.def.boss ? 26 : 15);
-    this.fx.puff(e.x, e.y - 10, e.def.key === 'wraith' ? 0x9ff7ff : 0xcccccc, e.def.boss ? 2.5 : 0.9);
+    this.fx.floatText(e.x, e.y - e.hitHeight - 20, `+${gold}`, '#ffd23a', e.def.boss ? 26 : 15);
+    this.fx.death(e.body, e.x, e.y, e.def.key === 'wraith');
+    this.fx.coin(e.x, e.y - e.hitHeight, e.def.boss ? 4 : 1);
     if (e.def.boss) { this.cameras.main.shake(400, 0.01); this.fx.explosion(e.x, e.y, 90); }
+    sfx.coin();
     sfx.die();
     if (e === this.selectedEnemy) { this.selectedEnemy = null; this.hideInfo(); }
     e.destroy();
@@ -318,7 +345,7 @@ export class GameScene extends Phaser.Scene {
       if (!e.alive || e.hp >= e.maxHp || dist(e.x, e.y, src.x, src.y) > r) continue;
       e.hp = Math.min(e.maxHp, e.hp + amount);
       e.onHit(false);
-      this.fx.sparks(e.x, e.y - 16, 0x7dff8a, 3, 14);
+      this.fx.heal(e.x, e.y);
       any = true;
     }
     if (any) this.fx.ring(src.x, src.y, r, 0x7dff8a, 600);
@@ -334,7 +361,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   addFire(x: number, y: number, r: number, dps: number, t: number): void {
-    const gfx = this.add.ellipse(x, y, r * 2, r * 1.1, 0xff6a1a, 0.4).setDepth(DEPTH.spots + 2);
+    const gfx = this.add.image(x, y, 'glow').setBlendMode(Phaser.BlendModes.ADD).setTint(0xff6a1a).setScale(r / 22, r / 40).setDepth(DEPTH.spots + 2);
     this.fires.push({ x, y, r, dps, t, gfx, sparkT: 0 });
   }
 
@@ -397,9 +424,11 @@ export class GameScene extends Phaser.Scene {
       const icon = this.add.image(0, -1, 'icon_skull').setScale(0.8);
       const ring = this.add.graphics();
       const hit = this.add.circle(0, 0, 34, 0x000000, 0).setInteractive({ useHandCursor: true });
-      const label = txt(this, 0, 44, first && this.waveIdx === 0 ? 'START!' : 'CALL', { size: 15, color: '#ffe26a', strokeThickness: 3 });
+      // near the bottom edge the labels go above the button so they don't cover the ability buttons
+      const up = y > H - 170;
+      const label = txt(this, 0, up ? -44 : 44, first && this.waveIdx === 0 ? 'START!' : 'CALL', { size: 15, color: '#ffe26a', strokeThickness: 3 });
       const sum = this.waveSummary(this.waveIdx, pi);
-      const sumText = txt(this, 0, 64, sum, { size: 12, color: '#ffffff', strokeThickness: 3 }).setOrigin(0.5, 0);
+      const sumText = txt(this, 0, up ? -58 : 58, sum, { size: 12, color: '#ffffff', strokeThickness: 3 }).setOrigin(0.5, up ? 1 : 0);
       c.add([g, ring, icon, hit, label, sumText]);
       hit.on('pointerdown', () => unlockAudio());
       hit.on('pointerup', () => this.startNextWave(true));
@@ -469,12 +498,13 @@ export class GameScene extends Phaser.Scene {
   private updateFires(dt: number): void {
     for (const f of this.fires) {
       f.t -= dt;
-      f.gfx.setAlpha(0.3 + Math.random() * 0.2);
+      f.gfx.setAlpha(Math.min(1, f.t) * (0.55 + Math.random() * 0.25));
       f.sparkT -= dt;
       if (f.sparkT <= 0) {
-        f.sparkT = 0.12;
-        const p = this.add.image(f.x + rand(-f.r, f.r) * 0.8, f.y + rand(-f.r, f.r) * 0.4, 'spark').setTint(Math.random() < 0.5 ? 0xffa22a : 0xff4a1a).setDepth(DEPTH.effects);
-        this.tweens.add({ targets: p, y: p.y - 24, alpha: 0, scale: 0.3, duration: 450, onComplete: () => p.destroy() });
+        f.sparkT = 0.07;
+        const p = this.add.image(f.x + rand(-f.r, f.r) * 0.8, f.y + rand(-f.r, f.r) * 0.35, 'glow').setBlendMode(Phaser.BlendModes.ADD)
+          .setTint(Math.random() < 0.5 ? 0xffa22a : 0xff4a1a).setScale(rand(0.25, 0.4)).setDepth(DEPTH.world + f.y + 20);
+        this.tweens.add({ targets: p, y: p.y - rand(20, 34), alpha: 0, scaleX: 0.1, duration: rand(380, 560), onComplete: () => p.destroy() });
       }
       for (const e of this.enemies) {
         if (e.alive && !e.flying && dist(e.x, e.y, f.x, f.y) < f.r) this.damageEnemy(e, f.dps * dt, 'true', true);
@@ -606,8 +636,11 @@ export class GameScene extends Phaser.Scene {
   private drawRange(x: number, y: number, r: number, rally = false): void {
     const g = this.rangeGfx;
     g.clear();
-    g.fillStyle(rally ? 0xffe26a : 0xffffff, 0.1); g.fillEllipse(x, y, r * 2, r * 2 * 0.92);
-    g.lineStyle(2, rally ? 0xffe26a : 0xffffff, 0.55); g.strokeEllipse(x, y, r * 2, r * 2 * 0.92);
+    const col = rally ? 0xffe26a : 0xffffff;
+    g.fillStyle(col, 0.08); g.fillEllipse(x, y, r * 2, r * 2 * 0.92);
+    g.fillStyle(col, 0.06); g.fillEllipse(x, y, r * 1.6, r * 1.6 * 0.92);
+    g.lineStyle(5, col, 0.18); g.strokeEllipse(x, y, r * 2, r * 2 * 0.92);
+    g.lineStyle(2, col, 0.75); g.strokeEllipse(x, y, r * 2, r * 2 * 0.92);
   }
 
   private spend(cost: number): boolean {
@@ -745,6 +778,7 @@ export class GameScene extends Phaser.Scene {
       this.speedBtn.icon.setTexture(this.speed === 1 ? 'icon_play' : 'icon_ff');
       this.tweens.timeScale = this.speed;
       this.time.timeScale = this.speed;
+      this.anims.globalTimeScale = this.speed;
     });
     this.speedBtn.setDepth(d);
     iconButton(this, W - 38, 40, 28, 'icon_pause', () => this.pause()).setDepth(d);
@@ -865,14 +899,19 @@ export class GameScene extends Phaser.Scene {
     this.tweens.add({ targets: t, alpha: 0, y: y - 20, delay: ms, duration: 400, onComplete: () => t.destroy() });
   }
 
+  private introCard: Phaser.GameObjects.Container | null = null;
+
   private introduceEnemy(key: string): void {
     const def = ENEMIES[key];
+    if (this.introCard?.active) this.introCard.destroy();
     const c = this.add.container(W / 2, 175).setDepth(DEPTH.hud + 8);
+    this.introCard = c;
     const g = this.add.graphics();
     g.fillStyle(0x000000, 0.35); g.fillRoundedRect(-283, -42, 570, 92, 14);
     g.fillStyle(0x1f150c, 0.95); g.fillRoundedRect(-285, -46, 570, 92, 14);
     g.lineStyle(3, 0xe8384a); g.strokeRoundedRect(-285, -46, 570, 92, 14);
-    const img = this.add.image(-238, 4, `enemy_${key}`).setScale(def.boss ? 0.8 : 1.4);
+    const img = this.add.image(-238, 6, `enemy_${key}_0`);
+    img.setScale(Math.min(1.5, 80 / Math.max(img.width, img.height)));
     const title = txt(this, -190, -22, `NEW ENEMY: ${def.name}`, { size: 20, color: '#ff8a7a' }).setOrigin(0, 0.5);
     const body = txt(this, -190, 2, def.tip, { size: 15, wrap: 460, strokeThickness: 3, align: 'left' }).setOrigin(0, 0);
     const hit = this.add.rectangle(0, 0, 570, 92, 0x000000, 0).setInteractive();
@@ -930,6 +969,7 @@ export class GameScene extends Phaser.Scene {
     this.paused = true;
     this.tweens.pauseAll();
     this.time.paused = true;
+    this.anims.pauseAll();
     const c = this.add.container(0, 0).setDepth(DEPTH.modal);
     const dim = this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.6).setInteractive();
     c.add(dim);
@@ -954,16 +994,21 @@ export class GameScene extends Phaser.Scene {
     this.paused = false;
     this.tweens.resumeAll();
     this.time.paused = false;
+    this.anims.resumeAll();
   }
 
   private restart(): void {
     this.tweens.resumeAll();
+    this.anims.resumeAll();
+    this.anims.globalTimeScale = 1;
     this.time.paused = false;
     this.scene.restart({ level: this.levelIndex });
   }
 
   private goToMap(): void {
     this.tweens.resumeAll();
+    this.anims.resumeAll();
+    this.anims.globalTimeScale = 1;
     this.time.paused = false;
     this.scene.start('Menu', { focus: this.levelIndex });
   }
@@ -976,6 +1021,7 @@ export class GameScene extends Phaser.Scene {
     this.clearHint();
     this.tweens.timeScale = 1;
     this.time.timeScale = 1;
+    this.anims.globalTimeScale = 1;
     const stars = victory ? (this.lives >= 18 ? 3 : this.lives >= 10 ? 2 : 1) : 0;
     if (victory) recordStars(this.levelIndex, stars);
     this.time.delayedCall(victory ? 900 : 600, () => this.showEndScreen(victory, stars));

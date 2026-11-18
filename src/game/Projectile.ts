@@ -36,6 +36,7 @@ export class Projectile {
     const tex = o.kind === 'arrow' ? 'arrow' : o.kind === 'bolt' ? 'bolt' : o.kind === 'rocket' ? 'rocketp' : o.kind === 'meteor' ? 'meteor' : 'shell';
     this.sprite = scene.add.image(o.x, o.y, tex).setDepth(DEPTH.projectile);
     if (o.tint !== undefined) this.sprite.setTint(o.tint);
+    if (o.kind === 'bolt' || o.kind === 'meteor') this.sprite.setBlendMode(Phaser.BlendModes.ADD);
     if (o.scale) this.sprite.setScale(o.scale);
     if (o.kind === 'bomblet') this.sprite.setScale(0.6);
     this.prevX = o.x; this.prevY = o.y;
@@ -58,11 +59,18 @@ export class Projectile {
     this.prevX = x; this.prevY = y;
 
     this.trailT -= dt;
-    if (this.trailT <= 0 && (this.o.kind === 'bolt' || this.o.kind === 'rocket' || this.o.kind === 'meteor')) {
-      this.trailT = 0.03;
-      const tint = this.o.kind === 'bolt' ? (this.o.tint ?? 0xffffff) : this.o.kind === 'rocket' ? 0xbbbbbb : 0xff8a2a;
-      const s = this.scene.add.image(x, y, 'puff').setTint(tint).setAlpha(0.5).setScale(this.o.kind === 'meteor' ? 0.8 : 0.3).setDepth(DEPTH.projectile - 1);
-      this.scene.tweens.add({ targets: s, alpha: 0, scale: s.scale * 0.3, duration: 300, onComplete: () => s.destroy() });
+    const k = this.o.kind;
+    if (this.trailT <= 0 && (k === 'bolt' || k === 'rocket' || k === 'meteor')) {
+      this.trailT = k === 'meteor' ? 0.02 : 0.03;
+      if (k === 'bolt' || k === 'meteor') {
+        const g = this.scene.add.image(x, y, 'glow').setBlendMode(Phaser.BlendModes.ADD).setTint(k === 'bolt' ? (this.o.tint ?? 0xffffff) : 0xff8a2a)
+          .setAlpha(0.7).setScale(k === 'meteor' ? 0.7 : 0.28).setDepth(DEPTH.projectile - 1);
+        this.scene.tweens.add({ targets: g, alpha: 0, scale: g.scale * 0.3, duration: k === 'meteor' ? 380 : 260, onComplete: () => g.destroy() });
+      }
+      if (k === 'rocket' || k === 'meteor') {
+        const sm = this.scene.add.image(x, y, 'smoke').setTint(k === 'meteor' ? 0x5a4a40 : 0xcfcac2).setAlpha(0.55).setScale(k === 'meteor' ? 0.5 : 0.22).setDepth(DEPTH.projectile - 2);
+        this.scene.tweens.add({ targets: sm, alpha: 0, scale: sm.scale * 2.2, y: y - 8, duration: k === 'meteor' ? 700 : 500, onComplete: () => sm.destroy() });
+      }
     }
 
     if (p >= 1) {

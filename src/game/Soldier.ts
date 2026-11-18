@@ -1,5 +1,6 @@
 import * as Phaser from 'phaser';
 import { DEPTH } from '../config';
+import { SOLDIER_TEX } from '../art/textures';
 import { dist, randInt } from '../util';
 import type { Enemy } from './Enemy';
 import type { Tower } from './Tower';
@@ -28,10 +29,10 @@ export class Soldier {
   removed = false;
   private atkT = 0;
   private respawnT = 0;
-  private walkPhase = Math.random() * 6;
 
   readonly view: Phaser.GameObjects.Container;
-  private body: Phaser.GameObjects.Image;
+  private body: Phaser.GameObjects.Sprite;
+  private mode: 'walk' | 'idle' | 'attack' | '' = '';
   private hpFg: Phaser.GameObjects.Rectangle;
   private hpBg: Phaser.GameObjects.Rectangle;
 
@@ -48,17 +49,29 @@ export class Soldier {
     this.x = x; this.y = y; this.homeX = homeX; this.homeY = homeY;
     const s = world;
     this.view = s.add.container(x, y);
-    const shadow = s.add.ellipse(0, 0, 20, 7, 0x000000, 0.3);
-    this.body = s.add.image(0, 0, `soldier_${stats.look}`).setOrigin(0.5, 0.95);
-    this.hpBg = s.add.rectangle(0, -42, 22, 4, 0x1a0a0a);
-    this.hpFg = s.add.rectangle(-10, -42, 20, 2.5, 0x4ab0ff).setOrigin(0, 0.5);
-    this.view.add([shadow, this.body, this.hpBg, this.hpFg]);
+    this.body = s.add.sprite(0, 0, `soldier_${stats.look}_0`).setOrigin(0.5, (SOLDIER_TEX.h - 2) / SOLDIER_TEX.h);
+    this.hpBg = s.add.rectangle(0, -44, 23, 5, 0x1a0a0a).setStrokeStyle(1, 0x000000, 0.6);
+    this.hpFg = s.add.rectangle(-10, -44, 20, 3, 0x4ab0ff).setOrigin(0, 0.5);
+    this.view.add([this.body, this.hpBg, this.hpFg]);
     this.refreshBar();
+    this.setMode('idle');
+  }
+
+  private setMode(m: 'walk' | 'idle' | 'attack'): void {
+    if (this.mode === m) return;
+    this.mode = m;
+    const k = `soldier_${this.stats.look}`;
+    if (m === 'walk') this.body.play(`${k}_walk`);
+    else if (m === 'attack') {
+      this.body.play(`${k}_attack`);
+      this.body.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => { if (this.mode === 'attack') this.mode = 'idle'; });
+    } else { this.body.anims.stop(); this.body.setTexture(`${k}_0`); }
   }
 
   setStats(stats: SoldierStats): void {
     this.stats = stats;
-    this.body.setTexture(`soldier_${stats.look}`);
+    this.mode = '';
+    this.setMode('idle');
     this.maxHp = stats.hp;
     if (this.alive) this.hp = stats.hp;
     this.refreshBar();
@@ -106,8 +119,7 @@ export class Soldier {
     this.x += (dx / d) * step;
     this.y += (dy / d) * step;
     if (Math.abs(dx) > 1) this.body.setFlipX(dx < 0);
-    this.walkPhase += dt * 14;
-    this.body.y = -Math.abs(Math.sin(this.walkPhase)) * 3;
+    if (this.mode !== 'attack') this.setMode('walk');
     return d - step < 2;
   }
 
@@ -120,7 +132,8 @@ export class Soldier {
         this.alive = true;
         this.hp = this.maxHp;
         this.x = this.owner.x; this.y = this.owner.y + 6;
-        this.view.setVisible(true);
+        this.view.setVisible(true).setAlpha(0);
+        this.world.tweens.add({ targets: this.view, alpha: 1, duration: 300 });
         this.refreshBar();
       }
       return;
@@ -153,7 +166,7 @@ export class Soldier {
       if (arrived && !tgt.blocker) tgt.blocker = this;
       if (dist(this.x, this.y, tgt.x, tgt.y) < tgt.def.radius + 16) {
         this.body.setFlipX(tgt.x < this.x);
-        if (arrived) this.body.y = 0;
+        if (arrived && this.mode === 'walk') this.setMode('idle');
         this.atkT -= dt;
         if (this.atkT <= 0) {
           this.atkT = this.stats.rate;
@@ -163,7 +176,7 @@ export class Soldier {
     } else {
       const home = this.moveTo(this.homeX, this.homeY, dt);
       if (home) {
-        this.body.y = 0;
+        if (this.mode === 'walk') this.setMode('idle');
         if (this.hp < this.maxHp) { this.hp = Math.min(this.maxHp, this.hp + this.maxHp * 0.08 * dt); this.refreshBar(); }
       }
     }
@@ -176,8 +189,8 @@ export class Soldier {
     this.world.damageEnemy(tgt, dmg, 'physical');
     this.world.fx.sparks(tgt.x, tgt.y - 14, 0xffffff, 3, 14);
     this.world.sfxSword();
-    const dir = tgt.x < this.x ? -1 : 1;
-    this.world.tweens.add({ targets: this.body, x: 5 * dir, angle: 12 * dir, duration: 70, yoyo: true });
+    this.mode = '';
+    this.setMode('attack');
 
     const o = this.owner;
     if (o && o.spec.skill && o.skillRank > 0) {

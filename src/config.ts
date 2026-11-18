@@ -1,6 +1,23 @@
 export const W = 1280;
 export const H = 720;
 
+/**
+ * Render scale: how many real screen pixels one game unit covers. The canvas is created at
+ * W*RES x H*RES and every camera zooms by RES, so the game draws at the device's true
+ * resolution instead of being stretched up from 1280x720. Capped for performance.
+ */
+function computeRes(): number {
+  if (typeof window === 'undefined') return 1;
+  const forced = Number(new URLSearchParams(location.search).get('res'));
+  if (forced > 0) return forced;
+  const vw = Math.max(window.innerWidth, window.innerHeight);   // the game is always landscape
+  const vh = Math.min(window.innerWidth, window.innerHeight);
+  const fit = Math.min(vw / W, vh / H);
+  const r = fit * (window.devicePixelRatio || 1);
+  return Math.max(1, Math.min(2, Math.round(r * 4) / 4));
+}
+export const RES = computeRes();
+
 export const FONT = '"Trebuchet MS", "Segoe UI", Arial, sans-serif';
 
 export const DEPTH = {
@@ -22,3 +39,9 @@ export const HUD_ZONES = [
   { x: 1050, y: 0, w: 230, h: 78 },   // speed / pause
   { x: 0, y: 610, w: 210, h: 110 },   // abilities
 ];
+
+/** Point a scene's main camera at the 1280x720 world, zoomed to the render scale. */
+export function setupCamera(scene: { cameras: { main: { setZoom(z: number): unknown; centerOn(x: number, y: number): unknown } } }): void {
+  scene.cameras.main.setZoom(RES);
+  scene.cameras.main.centerOn(W / 2, H / 2);
+}

@@ -60,8 +60,11 @@ export class RadialMenu {
     const c = s.add.container(Math.cos(a) * R, Math.sin(a) * R);
     const bg = s.add.graphics();
     const size = opt.iconSize ?? 36;
-    const icon = s.add.image(0, size > 40 ? 3 : 0, opt.icon);
-    icon.setScale(size / Math.max(icon.width, icon.height));
+    const icon = s.add.image(0, 0, opt.icon);
+    if (opt.icon.startsWith('tower_')) {
+      // tower art has headroom for tall roofs: anchor near the base so the building fills the button
+      icon.setOrigin(0.5, 0.8).setPosition(0, 21).setScale(0.52);
+    } else icon.setScale(size / Math.max(icon.width, icon.height));
     if (opt.tint !== undefined) icon.setTint(opt.tint);
     const check = s.add.image(0, 0, 'icon_check').setVisible(false);
     const hit = s.add.circle(0, 0, BR + 4, 0x000000, 0).setInteractive({ useHandCursor: true });

@@ -6,6 +6,7 @@ export interface Theme {
   groundLight: number;
   path: number;
   pathEdge: number;
+  ambient: 'pollen' | 'leaves' | 'fireflies' | 'snow' | 'embers';
   decor: ('tree' | 'pine' | 'rock' | 'bush' | 'flower' | 'deadtree' | 'snowpine' | 'crystal' | 'autumn' | 'lava')[];
 }
 
@@ -26,22 +27,27 @@ export interface LevelDef {
 }
 
 const MEADOW: Theme = {
+  ambient: 'pollen',
   ground: 0x6fa64a, groundDark: 0x5a8f3c, groundLight: 0x86bb5c, path: 0xd8b77a, pathEdge: 0xa9875a,
   decor: ['tree', 'tree', 'bush', 'flower', 'flower', 'rock', 'pine'],
 };
 const AUTUMN: Theme = {
+  ambient: 'leaves',
   ground: 0x8fa24a, groundDark: 0x7a8b3c, groundLight: 0xa7b860, path: 0xcfa36e, pathEdge: 0x9b7346,
   decor: ['autumn', 'autumn', 'tree', 'bush', 'rock', 'flower'],
 };
 const SWAMP: Theme = {
+  ambient: 'fireflies',
   ground: 0x4f7a4a, groundDark: 0x3f6540, groundLight: 0x62905a, path: 0x9c8a62, pathEdge: 0x6f6244,
   decor: ['deadtree', 'pine', 'bush', 'rock', 'crystal', 'pine'],
 };
 const SNOW: Theme = {
+  ambient: 'snow',
   ground: 0xdfe8ef, groundDark: 0xc5d3df, groundLight: 0xf4f8fb, path: 0xa8a3a0, pathEdge: 0x7c7877,
   decor: ['snowpine', 'snowpine', 'rock', 'snowpine', 'crystal'],
 };
 const EMBER: Theme = {
+  ambient: 'embers',
   ground: 0x5b4a44, groundDark: 0x4a3b36, groundLight: 0x6e5a52, path: 0x9a7c62, pathEdge: 0x3a2c26,
   decor: ['deadtree', 'rock', 'rock', 'lava', 'crystal'],
 };
