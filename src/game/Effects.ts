@@ -42,9 +42,9 @@ export class Effects {
       this.scene.tweens.add({ targets: d, y: ty - rand(30, 55), duration: 250, ease: 'Quad.easeOut', yoyo: true, onComplete: () => d.destroy() });
       this.scene.tweens.add({ targets: d, angle: d.angle + rand(-360, 360), duration: 500 });
     }
-    const scorch = this.img(x, y + 2, 'shadow', DEPTH.spots + 1).setTint(0x2a1a0a).setAlpha(0.7);
-    scorch.setScale(radius / 30, radius / 60);
-    this.fade(scorch, { alpha: 0 }, 2600, 600, 'Linear');
+    const scorch = this.img(x, y + 2, 'shadow', DEPTH.spots + 1).setTint(0x4a3a2a).setAlpha(0.32);
+    scorch.setScale(radius / 44, radius / 88);
+    this.fade(scorch, { alpha: 0 }, 1400, 300, 'Linear');
   }
 
   sparks(x: number, y: number, color: number, n = 6, spread = 28): void {
