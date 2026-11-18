@@ -135,6 +135,35 @@ export function generateFx(scene: Phaser.Scene): void {
     circ(c, 26, 20, 9, rg(c, 24, 18, 10, [[0, '#ffffff'], [1, '#3aa8e0']]), OUT, 2);
     star(c, 20, 20, 7, 3, 4, '#ffffff', OUT, 1.2);
   });
+  // moon phases for the wave track: phase k of 10 (10 = full moon)
+  for (let k = 1; k <= 10; k++) {
+    tex(scene, `moon_${k}`, 34, 34, c => {
+      const r = 15, cx = 17, cy = 17;
+      c.save();
+      c.beginPath(); c.arc(cx, cy, r, 0, Math.PI * 2); c.clip();
+      c.fillStyle = rg(c, cx - 4, cy - 4, r * 1.4, [[0, '#ffffff'], [0.7, '#e6f2ff'], [1, '#b8cce0']]);
+      c.fillRect(0, 0, 34, 34);
+      for (const [x, y, rr] of [[cx - 5, cy - 3, 3], [cx + 4, cy + 5, 2.4], [cx + 6, cy - 6, 1.6]] as const) { c.fillStyle = 'rgba(150,170,200,0.45)'; c.beginPath(); c.arc(x, y, rr, 0, Math.PI * 2); c.fill(); }
+      const shift = 2 * r * (0.08 + 0.92 * (k / 10));
+      c.fillStyle = 'rgba(16,24,48,0.94)';
+      c.beginPath(); c.arc(cx - shift, cy, r, 0, Math.PI * 2); c.fill();
+      c.restore();
+      c.strokeStyle = 'rgba(207,230,240,0.9)'; c.lineWidth = 1.2;
+      c.beginPath(); c.arc(cx, cy, r, 0, Math.PI * 2); c.stroke();
+    });
+  }
+  tex(scene, 'icon_drop', 40, 40, c => {
+    c.fillStyle = rg(c, 20, 22, 20, [[0, 'rgba(122,240,224,0.6)'], [1, 'rgba(122,240,224,0)']]); c.fillRect(0, 0, 40, 40);
+    shape(c, cc => { cc.moveTo(20, 6); cc.bezierCurveTo(31, 19, 31, 33, 20, 33); cc.bezierCurveTo(9, 33, 9, 19, 20, 6); },
+      lg(c, 0, 6, 0, 33, [[0, '#ffffff'], [0.5, '#bffaff'], [1, '#5ad0e0']]), '#0a0f1a', 1.8);
+    gloss(c, 16, 22, 3, 1.6, 0.8, -0.8);
+  });
+  tex(scene, 'glyph_bolt', 32, 32, c => poly(c, [19, 2, 7, 18, 14, 18, 11, 30, 25, 13, 18, 13], '#ffffff', '#0a0f1a', 1.6));
+  tex(scene, 'glyph_nova', 32, 32, c => star(c, 16, 16, 13, 5, 8, '#ffffff', '#0a0f1a', 1.4));
+  tex(scene, 'glyph_moth', 32, 24, c => {
+    ell(c, 9, 12, 7, 5.5, '#cfe6f0', '#0a0f1a', 1.3); ell(c, 23, 12, 7, 5.5, '#cfe6f0', '#0a0f1a', 1.3);
+    ell(c, 16, 13, 2.2, 7, '#0a0f1a', null);
+  });
   tex(scene, 'icon_pause', 48, 48, c => { rrect(c, 13, 10, 8, 28, 2.5, '#ffffff', OUT, 2); rrect(c, 27, 10, 8, 28, 2.5, '#ffffff', OUT, 2); });
   tex(scene, 'icon_play', 48, 48, c => poly(c, [15, 10, 38, 24, 15, 38], '#ffffff', OUT, 2.2));
   tex(scene, 'icon_ff', 48, 48, c => { poly(c, [6, 12, 24, 24, 6, 36], '#ffe26a', OUT, 2); poly(c, [24, 12, 42, 24, 24, 36], '#ffe26a', OUT, 2); });

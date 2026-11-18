@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser';
-import { FONT, RES } from './config';
+import { FONT, FONT_BODY, RES } from './config';
 
 export interface Pt { x: number; y: number }
 
@@ -36,11 +36,13 @@ export interface TextOpts {
   align?: 'left' | 'center' | 'right';
   wrap?: number;
   bold?: boolean;
+  /** Use the plain body face (default for wrapped text). */
+  body?: boolean;
 }
 
 export function txt(scene: Phaser.Scene, x: number, y: number, s: string, o: TextOpts = {}): Phaser.GameObjects.Text {
   const t = scene.add.text(x, y, s, {
-    fontFamily: FONT,
+    fontFamily: (o.body ?? !!o.wrap) ? FONT_BODY : FONT,
     fontSize: `${o.size ?? 20}px`,
     fontStyle: o.bold === false ? 'normal' : 'bold',
     color: o.color ?? '#ffffff',

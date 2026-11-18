@@ -18,13 +18,28 @@ export interface RadialOption {
   action: () => void;
 }
 
-const R = 72;
-const BR = 28;
+const R = 70;
+/** Tap radius around each petal's centre. */
+const HIT_R = 32;
+/** Petal size: length along the spoke, width across it. */
+const PL = 74, PW = 50;
+
+/** Outline of a petal centred on the origin, pointing along `angle`. */
+function petalPoints(angle: number, len = PL, wid = PW): Phaser.Math.Vector2[] {
+  const pts: Phaser.Math.Vector2[] = [];
+  const ca = Math.cos(angle), sa = Math.sin(angle);
+  const N = 18;
+  const add = (along: number, across: number) => pts.push(new Phaser.Math.Vector2(ca * along - sa * across, sa * along + ca * across));
+  for (let i = 0; i <= N; i++) { const t = i / N; add(-len / 2 + len * t, (wid / 2) * Math.pow(Math.sin(Math.PI * t), 0.85) * (t < 0.5 ? 0.85 : 1)); }
+  for (let i = N - 1; i > 0; i--) { const t = i / N; add(-len / 2 + len * t, -(wid / 2) * Math.pow(Math.sin(Math.PI * t), 0.85) * (t < 0.5 ? 0.85 : 1)); }
+  return pts;
+}
 
 interface Slot {
   opt: RadialOption;
   c: Phaser.GameObjects.Container;
   bg: Phaser.GameObjects.Graphics;
+  angle: number;
   icon: Phaser.GameObjects.Image;
   check: Phaser.GameObjects.Image;
   price?: Phaser.GameObjects.Text;
@@ -37,16 +52,18 @@ export class RadialMenu {
   private lastFunds = -1;
 
   constructor(private scene: Phaser.Scene, x: number, y: number, options: RadialOption[], private getFunds: () => number) {
-    const cx = clamp(x, R + BR + 6, W - R - BR - 6);
-    const cy = clamp(y, R + BR + 16, H - R - BR - 14);
+    const reach = R + PL / 2 + 2;
+    const cx = clamp(x, reach, W - reach);
+    const cy = clamp(y, reach + 4, H - reach);
     this.container = scene.add.container(cx, cy).setDepth(DEPTH.menu);
-    const ring = scene.add.graphics();
-    ring.lineStyle(14, 0x1a1208, 0.45); ring.strokeCircle(0, 0, R);
-    ring.lineStyle(3, 0xd4a017, 0.7); ring.strokeCircle(0, 0, R);
-    this.container.add(ring);
+    // the glowing seed the bloom opens from
+    const seedGlow = scene.add.image(0, 0, 'glow').setBlendMode(Phaser.BlendModes.ADD).setTint(0xff6ad8).setScale(0.9).setAlpha(0.8);
+    const seed = scene.add.circle(0, 0, 7, 0xfff0fb).setStrokeStyle(2, 0x0a0f1a);
+    this.container.add([seedGlow, seed]);
+    scene.tweens.add({ targets: seedGlow, scale: 1.15, alpha: 0.5, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     // offset of menu center relative to the actual target (when clamped at screen edges)
     if (cx !== x || cy !== y) {
-      const dot = scene.add.circle(x - cx, y - cy, 6, 0xd4a017);
+      const dot = scene.add.circle(x - cx, y - cy, 6, 0xff9ae6);
       this.container.add(dot);
     }
     options.forEach((opt, i) => this.addSlot(opt, i));
@@ -61,27 +78,26 @@ export class RadialMenu {
     const c = s.add.container(Math.cos(a) * R, Math.sin(a) * R);
     const bg = s.add.graphics();
     const size = opt.iconSize ?? 36;
-    const icon = s.add.image(0, 0, opt.icon);
-    if (opt.icon.startsWith('tower_')) {
-      // tower art has headroom for tall roofs: anchor near the base so the building fills the button
-      icon.setOrigin(0.5, 0.8).setPosition(0, 21).setScale(0.52);
-    } else icon.setScale(size / Math.max(icon.width, icon.height));
+    // icon sits toward the petal's outer end, the price toward the seed
+    const icon = s.add.image(Math.cos(a) * 9, Math.sin(a) * 9 - 2, opt.icon);
+    icon.setScale(size / Math.max(icon.width, icon.height));
     if (opt.tint !== undefined) icon.setTint(opt.tint);
     const check = s.add.image(0, 0, 'icon_check').setVisible(false);
-    const hit = s.add.circle(0, 0, BR + 4, 0x000000, 0).setInteractive({ useHandCursor: true });
+    const hit = s.add.circle(0, 0, HIT_R, 0x000000, 0).setInteractive({ useHandCursor: true });
     c.add([bg, icon, check, hit]);
 
-    const slot: Slot = { opt, c, bg, icon, check };
+    check.setPosition(icon.x, icon.y);
+    const slot: Slot = { opt, c, bg, angle: a, icon, check };
     if (opt.price !== undefined || opt.priceLabel) {
-      const tag = s.add.graphics();
-      tag.fillStyle(0x1a1208, 0.9); tag.fillRoundedRect(-26, BR - 6, 52, 20, 8);
-      const p = txt(s, 0, BR + 4, opt.priceLabel ?? String(opt.price), { size: 15, color: '#ffd23a', strokeThickness: 3 });
-      c.add([tag, p]);
+      const p = txt(s, -Math.cos(a) * 22, -Math.sin(a) * 22, opt.priceLabel ?? String(opt.price), { size: 14, color: '#bffaff', strokeThickness: 3 });
+      c.add(p);
       slot.price = p;
     }
     if (opt.pips) {
       for (let k = 0; k < opt.pips[1]; k++) {
-        const pip = s.add.circle(-12 + k * 12, -BR - 4, 4.5, k < opt.pips[0] ? 0xffd23a : 0x3a3a3a).setStrokeStyle(1.5, 0x1a1208);
+        const px = Math.cos(a) * (PL / 2 + 6) - Math.sin(a) * (k - (opt.pips[1] - 1) / 2) * 11;
+        const py = Math.sin(a) * (PL / 2 + 6) + Math.cos(a) * (k - (opt.pips[1] - 1) / 2) * 11;
+        const pip = s.add.circle(px, py, 4.2, k < opt.pips[0] ? 0xff9ae6 : 0x2a2440).setStrokeStyle(1.5, 0x0a0f1a);
         c.add(pip);
       }
     }
@@ -126,13 +142,18 @@ export class RadialMenu {
       const sel = i === this.selected;
       const g = slot.bg;
       g.clear();
-      g.fillStyle(0x000000, 0.35); g.fillCircle(2, 4, BR);
-      g.fillStyle(sel ? 0x5a4a1a : 0x2a1e12); g.fillCircle(0, 0, BR);
-      g.lineStyle(sel ? 4 : 3, sel ? 0xffe26a : ok ? 0xd4a017 : 0x6a6a6a); g.strokeCircle(0, 0, BR);
+      const pts = petalPoints(slot.angle);
+      g.fillStyle(0x000000, 0.35); g.fillPoints(pts.map(p => new Phaser.Math.Vector2(p.x + 2, p.y + 4)), true);
+      g.fillStyle(sel ? 0x4a2f7a : 0x241a40, 0.96); g.fillPoints(pts, true);
+      if (sel) { g.lineStyle(7, 0xff9ae6, 0.25); g.strokePoints(pts, true); }
+      g.lineStyle(sel ? 3 : 2, sel ? 0xff9ae6 : ok ? 0x8a6aff : 0x4a4a5a); g.strokePoints(pts, true);
+      // central vein
+      g.lineStyle(1, 0xcfe6f0, 0.25);
+      g.lineBetween(-Math.cos(slot.angle) * PL * 0.42, -Math.sin(slot.angle) * PL * 0.42, Math.cos(slot.angle) * PL * 0.42, Math.sin(slot.angle) * PL * 0.42);
       slot.icon.setAlpha(ok ? 1 : 0.45);
       slot.check.setVisible(sel && ok);
       slot.icon.setVisible(!(sel && ok));
-      if (slot.price && slot.opt.price !== undefined) slot.price.setColor(ok ? '#ffd23a' : '#c05050');
+      if (slot.price && slot.opt.price !== undefined) slot.price.setColor(ok ? '#bffaff' : '#ff7a8a');
       if (slot.opt.maxed && slot.price) slot.price.setText(slot.opt.maxedLabel ?? 'MAX').setColor('#aaaaaa');
     });
   }

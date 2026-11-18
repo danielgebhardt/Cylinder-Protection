@@ -1,58 +1,67 @@
 # Cylinder Protection
 
-A fantasy tower-defense game for Android (and the browser). The Warlord's horde is marching on the ancient
-**Cylinder** — build towers along the road, upgrade them, pick specializations, and hold the line.
+A fantasy tower-defense game for Android (and the browser), set in **Moonwell Glade**: a moonlit fey
+realm where the Blight creeps along the old moon-roads to snuff out the **Moonwell**, the shining
+stone cylinder at the end of every road. Plant elemental blooms, spread the Moonwell's glow, and
+hold the line until dawn.
 
 Built with **TypeScript + Phaser 4 + Vite**, packaged for Android with **Capacitor 8**.
 All art and sound are generated in code — there are no image or audio asset files. Sprites are painted
 with Canvas2D (gradients, outlines, highlights) at the device's real pixel density, so they stay sharp on
-high-resolution phone screens, and every unit has walk and attack animations.
+high-resolution phone screens, and every creature has walk and attack animations. The display font
+(Cinzel, OFL) is bundled so the app works offline.
 
 ## How it plays
 
-**The energy network.** The Cylinder projects an energy field, and you can build anywhere inside it
-except on the road. **Conduit Pylons** relay power outward and extend the field. Every structure is
-linked back to the Cylinder by a glowing conduit, and each source can power a limited number of crystals
-(the Cylinder 5, each Pylon 3; the pips above a source show its load). **Bats, wraiths and the Warlord
-sever conduits they pass through**, and crystals that lose power go dark until the link recovers or
-reroutes through another source. Kills give **energy**, the only currency.
+**The Moonwell's glow.** The Moonwell lights the ground around it, and you can plant anywhere in that
+glow except on the road. **Moth Lanterns** relay the light outward and extend the glow. Every bloom
+is linked back to the Moonwell by a shining **moonbeam**, and each light can only feed so many blooms
+(the Moonwell 5, each Lantern 3; the pips above it show its load). **Shadow Moths, Blight Wisps and
+the Hollow King snip moonbeams** they pass through, and blooms that lose their light droop and go
+dark until the beam recovers or reroutes. Defeated Blight leaves **moonlight**, the only currency.
 
-**Elemental crystals and fusion.** Four crystals:
+**Elemental blooms and fusion.** Four blooms:
 
-| Crystal | Attack |
+| Bloom | Attack |
 |---|---|
-| Fire | arcing fireballs, splash + burn |
-| Frost | ice shards that slow |
-| Storm | rapid lightning that chains, great vs flyers |
-| Earth | heavy boulders, splash, ground only |
+| Ember Bloom | arcing fireballs, splash + burn |
+| Frost Lily | ice shards that slow |
+| Storm Orchid | rapid lightning that chains, great vs flyers |
+| Stone Thistle | heavy stones, splash, ground only |
 
-Tap a crystal next to another to **fuse** them into one stronger tower. Fusing also frees a power slot.
+Tap a bloom next to another to **fuse** them into one stronger flower. Fusing also frees a slot.
 
-| | Fire | Frost | Storm | Earth |
+| | Ember | Frost | Storm | Stone |
 |---|---|---|---|---|
-| **Fire** | Inferno | Steam Vent | Plasma Spire | Magma Forge |
-| **Frost** | | Permafrost | Blizzard Eye | Glacier Spire |
-| **Storm** | | | Tempest | Tremor Core |
-| **Earth** | | | | Monolith |
+| **Ember** | Wildfire Rose | Mist Lotus | Starfire Orchid | Cinder Thorn |
+| **Frost** | | Winter Lily | Sleet Orchid | Frostroot |
+| **Storm** | | | Thunder Orchid | Quakeroot |
+| **Stone** | | | | Ironthistle |
 
-Any crystal (fused or not) can be **attuned** three times for more damage and range.
+Any bloom (fused or not) can be **attuned** three times for more damage and range.
 
-**Cylinder powers.** *Surge* makes powered crystals fire twice as fast for a few seconds; *Nova* blasts
-enemies near the Cylinder and knocks them back.
+**The Blight:** Thornlings, Shade Hounds, Bramble Knights, Shadow Moths, Blight Witches (heal their
+kin), Mossback Trolls, Blight Wisps, and the **Hollow King**, who summons Thornlings as he marches.
 
-**Also:** 5 levels (meadow, autumn forest, swamp, snow pass, volcanic gate) with one- and two-road
-maps and a boss, 8 enemy types, call waves early through the rift for bonus energy, 1×/2× speed,
-3-star ratings, saved progress and a first-level tutorial. On Android it's landscape-locked and
-fullscreen, the back button pauses, and it auto-pauses in the background.
+**Moonwell powers.** *Surge* makes lit blooms strike twice as fast for a few seconds; *Nova* blasts
+the Blight near the Moonwell and knocks it back.
 
-## Controls
+**Levels:** Glimmerwood, Lantern Fen, Mirrormere (two roads), Frosted Hollow and the Hollow King's
+Court, each with its own night weather.
 
-1. Tap glowing ground to open the build ring: four crystals and a Pylon. Tap once for details, again to build.
-2. Tap the **rift** at a road entrance to start the first wave.
-3. Tap a crystal to attune, fuse with a neighbour, or dismantle it.
-4. Tap an enemy to see its armor, magic resistance and how to beat it.
+## Screen layout
 
-Don't let enemies reach the Cylinder: lose 2 or fewer lives for 3 stars.
+- **Top centre:** the moon-phase track, one moon per night, waxing toward the full moon. The ringed
+  moon is tonight; the next moon carries the countdown. **Tap the next moon** to call it early for
+  bonus moonlight. Below it, which Blight is coming next.
+- **Around the Moonwell:** one glowing petal per life. Petals fall when the Blight gets through.
+- **Bottom centre:** the crescent dock with moonlight, Surge, Nova, speed (the moth) and pause.
+- **Planting:** tap glowing ground and a petal bloom opens with the four blooms and a Moth Lantern.
+  Tap a petal once for details, again to plant. Tap a bloom to attune, fuse or uproot it.
+- Tap any creature to see its armor, magic resistance and how to beat it.
+
+Lose 2 or fewer petals for 3 stars. On Android it's landscape-locked and fullscreen, the back
+button pauses, and it auto-pauses in the background.
 
 ## Development
 
@@ -65,7 +74,7 @@ npm run build        # typecheck + production bundle in dist/
 Handy URL parameters while developing:
 
 - `?level=2` — jump straight into a level (0-based)
-- `?debug` — start with lots of energy
+- `?debug` — start with lots of moonlight
 - `?res=2` — force the render scale (normally picked from the screen's pixel density)
 
 ## Android
@@ -100,12 +109,12 @@ src/
     draw.ts            Canvas2D toolkit + hi-res texture registration
     towers.ts units.ts world.ts fx.ts
   data/
-    enemies.ts         enemy stats & tips
-    towers.ts          crystals, fusion table, attunement, network constants
+    enemies.ts         Blight creature stats & tips
+    towers.ts          blooms, fusion table, attunement, network constants
     levels.ts          maps (road control points), waves, themes, economy
   game/
-    Network.ts         energy field, conduits, capacity, severing
-    Tower.ts           crystal towers, pylons, the Cylinder node
+    Network.ts         the glow, moonbeams, capacity, snipping
+    Tower.ts           bloom towers, Moth Lanterns, the Moonwell node
     PathLine.ts Enemy.ts Projectile.ts Effects.ts
   scenes/
     BootScene.ts       generates textures

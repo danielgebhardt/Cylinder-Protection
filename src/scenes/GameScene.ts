@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import { W, H, DEPTH, HUD_ZONES, setupCamera } from '../config';
-import { paintMap } from '../art/world';
+import { paintMap, MOONWELL_TEX } from '../art/world';
 import { LEVELS } from '../data/levels';
 import type { LevelDef } from '../data/levels';
 import { ENEMIES } from '../data/enemies';
@@ -15,11 +15,24 @@ import type { Projectile } from '../game/Projectile';
 import { Effects } from '../game/Effects';
 import { RadialMenu } from '../ui/RadialMenu';
 import type { RadialOption } from '../ui/RadialMenu';
-import { button, iconButton, panel } from '../ui/widgets';
+import { button, panel } from '../ui/widgets';
 import { dist, rand, rectsContain, seeded, txt } from '../util';
 import type { Pt } from '../util';
 import { sfx, isMuted, setMuted, unlockAudio } from '../audio';
 import { load, save, recordStars } from '../save';
+
+const ORDINAL = ['First', 'Second', 'Third', 'Fourth', 'Fifth', 'Sixth', 'Seventh', 'Eighth', 'Ninth', 'Tenth', 'Eleventh', 'Twelfth', 'Thirteenth', 'Fourteenth', 'Fifteenth'];
+const NUMBER_WORD = ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen'];
+
+/** Leaf outline centred on the origin; rot is the leaf's tilt in degrees (0 = upright). */
+function leafPoints(rot: number, len: number, wid: number): Phaser.Math.Vector2[] {
+  const r = Phaser.Math.DegToRad(rot - 90), ca = Math.cos(r), sa = Math.sin(r);
+  const pts: Phaser.Math.Vector2[] = [];
+  const add = (along: number, across: number) => pts.push(new Phaser.Math.Vector2(ca * along - sa * across, sa * along + ca * across));
+  for (let i = 0; i <= 16; i++) { const t = i / 16; add(-len / 2 + len * t, (wid / 2) * Math.pow(Math.sin(Math.PI * t), 0.8)); }
+  for (let i = 15; i > 0; i--) { const t = i / 16; add(-len / 2 + len * t, -(wid / 2) * Math.pow(Math.sin(Math.PI * t), 0.8)); }
+  return pts;
+}
 
 const WAVE_GAP = 22;          // seconds between waves (after the previous wave has fully spawned)
 const SURGE_CD = 40;
@@ -70,10 +83,7 @@ export class GameScene extends Phaser.Scene {
   // HUD
   private rangeGfx!: Phaser.GameObjects.Graphics;
   private ghost!: Phaser.GameObjects.Container;
-  private livesText!: Phaser.GameObjects.Text;
   private energyText!: Phaser.GameObjects.Text;
-  private waveText!: Phaser.GameObjects.Text;
-  private speedBtn!: Phaser.GameObjects.Container & { icon: Phaser.GameObjects.Image };
   private abilityGfx!: Phaser.GameObjects.Graphics;
   private surgeBtn!: Phaser.GameObjects.Container;
   private novaBtn!: Phaser.GameObjects.Container;
@@ -125,7 +135,7 @@ export class GameScene extends Phaser.Scene {
     this.network.onCut = (at) => {
       this.fx.linkCut(at.x, at.y);
       sfx.zap();
-      this.tip('cut', 'Conduit severed!', 'Bats, wraiths and the Warlord cut energy links they pass. Keep conduits away from the road, or add a second Pylon as backup.');
+      this.tip('cut', 'Moonbeam snipped!', 'Shadow Moths, Blight Wisps and the Hollow King cut moonbeams they pass. Keep beams away from the road, or add a second Moth Lantern as backup.');
     };
 
     this.rangeGfx = this.add.graphics().setDepth(DEPTH.range);
@@ -152,7 +162,7 @@ export class GameScene extends Phaser.Scene {
     });
 
     this.cameras.main.fadeIn(350, 0, 0, 0);
-    this.toast(this.level.name, 2600, 40);
+    this.toast(this.level.name, 2600, 170);
     if (this.levelIndex === 0 && !(load().stars[0] > 0)) {
       this.tutorial = 1;
       this.time.delayedCall(900, () => this.showHint());
@@ -178,7 +188,7 @@ export class GameScene extends Phaser.Scene {
     for (let i = 0; i < 420 && placed.length < 70; i++) {
       const x = 20 + rng() * (W - 40), y = 30 + rng() * (H - 40);
       const kind = kinds[Math.floor(rng() * kinds.length)];
-      const pad = kind === 'flower' ? 34 : 48;
+      const pad = kind === 'fern' ? 38 : 48;
       if (minPathDist(this.paths, x, y) < pad) continue;
       if (dist(x, y, this.endPt.x, this.endPt.y) < 80) continue;
       if (rectsContain(HUD_ZONES, x, y, 6)) continue;
@@ -187,13 +197,13 @@ export class GameScene extends Phaser.Scene {
       const img = this.add.image(x, y, `decor_${kind}`).setOrigin(0.5, 66 / 72).setScale(0.8 + rng() * 0.4);
       this.decor.push(img);
       if (rng() < 0.5) img.setFlipX(true);
-      img.setDepth(kind === 'flower' || kind === 'lava' ? DEPTH.spots - 1 : DEPTH.world + y);
+      img.setDepth(DEPTH.world + y);
       // gentle wind sway for plants
-      if (kind === 'tree' || kind === 'autumn' || kind === 'pine' || kind === 'snowpine' || kind === 'bush') {
+      if (kind === 'glowtree' || kind === 'frostpine' || kind === 'fern' || kind === 'reeds' || kind === 'thornbush') {
         this.tweens.add({ targets: img, angle: { from: -1.4, to: 1.4 }, duration: 1600 + rng() * 1400, yoyo: true, repeat: -1, ease: 'Sine.easeInOut', delay: rng() * 1500 });
       }
-      if (kind === 'crystal' || kind === 'lava') {
-        const g = this.add.image(x, y - 14, 'glow').setBlendMode(Phaser.BlendModes.ADD).setTint(kind === 'lava' ? 0xff7a2a : 0x6ad0ff).setScale(0.9).setAlpha(0.35).setDepth(img.depth + 1);
+      if (kind === 'crystal' || kind === 'mushroom' || kind === 'runestone') {
+        const g = this.add.image(x, y - 14, 'glow').setBlendMode(Phaser.BlendModes.ADD).setTint(kind === 'mushroom' ? 0xff6ad8 : 0x6ad0ff).setScale(0.9).setAlpha(0.35).setDepth(img.depth + 1);
         this.tweens.add({ targets: g, alpha: 0.12, scale: 1.1, duration: 1200 + rng() * 800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
         g.setData('decorY', y);
         this.decor.push(g);
@@ -201,58 +211,80 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private lifePetals: Phaser.GameObjects.Image[] = [];
+  private livesLabel!: Phaser.GameObjects.Text;
+
+  /** The Moonwell: the thing the Blight wants to snuff out. Lives are petals ringed around it. */
   private placeCylinder(): void {
     const { x, y } = this.endPt;
     const ADD = Phaser.BlendModes.ADD;
     const d = DEPTH.world + y + 12;
-    const glow = this.add.image(x, y - 60, 'glow').setBlendMode(ADD).setTint(0x5ad0ff).setScale(3.2).setAlpha(0.45).setDepth(d - 1);
-    this.tweens.add({ targets: glow, scale: 3.8, alpha: 0.25, duration: 1400, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-    const beam = this.add.image(x, y - 150, 'glow').setBlendMode(ADD).setTint(0x9feaff).setScale(0.7, 5).setAlpha(0.22).setDepth(d + 1);
-    this.tweens.add({ targets: beam, alpha: 0.1, scaleX: 0.55, duration: 2000, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-    this.cylinder = this.add.image(x, y + 12, 'cylinder').setOrigin(0.5, 132 / 140).setDepth(d);
-    this.tweens.add({ targets: this.cylinder, y: y + 8, duration: 1800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-    this.add.particles(x, y - 60, 'spark', {
-      x: { min: -28, max: 28 }, y: { min: -40, max: 50 }, speedY: { min: -30, max: -12 }, speedX: { min: -6, max: 6 },
-      lifespan: 1600, scale: { start: 0.9, end: 0 }, alpha: { start: 1, end: 0 }, tint: [0x9feaff, 0xffffff, 0x5ad0ff],
-      blendMode: 'ADD', frequency: 120,
+    const glow = this.add.image(x, y - 30, 'glow').setBlendMode(ADD).setTint(0xbfe8ff).setScale(3.4, 2.2).setAlpha(0.5).setDepth(d - 1);
+    this.tweens.add({ targets: glow, alpha: 0.3, duration: 1600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    // a pillar of moonlight rising from the water
+    const beam = this.add.image(x, y - 150, 'glow').setBlendMode(ADD).setTint(0xe8f4ff).setScale(0.9, 6).setAlpha(0.32).setDepth(d + 1);
+    this.tweens.add({ targets: beam, alpha: 0.18, scaleX: 0.75, duration: 2200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    this.cylinder = this.add.image(x, y + 10, 'moonwell').setOrigin(0.5, MOONWELL_TEX.oy).setDepth(d);
+    this.add.particles(x, y - 20, 'spark', {
+      x: { min: -32, max: 32 }, y: { min: -6, max: 6 }, speedY: { min: -46, max: -20 }, speedX: { min: -5, max: 5 },
+      lifespan: 2400, scale: { start: 0.9, end: 0 }, alpha: { start: 1, end: 0 }, tint: [0xffffff, 0xbfe8ff, 0xff9ae6],
+      blendMode: 'ADD', frequency: 110,
     }).setDepth(d + 2);
+    // lives: one petal per life, ringed around the well
+    this.lifePetals = [];
+    const n = this.level.lives;
+    for (let i = 0; i < n; i++) {
+      const a = -Math.PI / 2 + (i * Math.PI * 2) / n;
+      const px = x + Math.cos(a) * 76, py = y - 12 + Math.sin(a) * 30;
+      const petal = this.add.image(px, py, 'petal').setRotation(a + Math.PI / 2).setTint(0xff9ae6)
+        .setDepth(Math.sin(a) < 0 ? d - 0.5 : d + 0.5);
+      this.lifePetals.push(petal);
+    }
+    this.livesLabel = txt(this, x, y + 44, '', { size: 15, color: '#ffd0f4', strokeThickness: 3 }).setDepth(d + 3);
   }
 
-  /** Weather, drifting cloud shadows and a soft vignette. */
+  private refreshLives(): void {
+    this.lifePetals.forEach((p, i) => {
+      const on = i < this.lives;
+      if (p.getData('on') === on) return;
+      p.setData('on', on);
+      if (on) { p.setTint(0xff9ae6).setAlpha(1); return; }
+      // a petal falls and withers
+      const ghost = this.add.image(p.x, p.y, 'petal').setRotation(p.rotation).setTint(0xff9ae6).setDepth(p.depth + 1);
+      this.tweens.add({ targets: ghost, y: p.y + 30, angle: ghost.angle + 120, alpha: 0, duration: 900, ease: 'Quad.easeIn', onComplete: () => ghost.destroy() });
+      p.setTint(0x2a2440).setAlpha(0.7);
+    });
+    this.livesLabel.setText(`${this.lives} / ${this.level.lives}`);
+  }
+
+  /** Night ambience: moonlight, drifting motes or weather, and a soft vignette. */
   private addAmbience(): void {
-    const amb = this.level.theme.ambient;
+    const th = this.level.theme;
     const top = DEPTH.effects + 40;
-    const common = { blendMode: 'ADD' as const };
-    if (amb === 'pollen') {
-      this.add.particles(0, 0, 'spark', { ...common, x: { min: 0, max: W }, y: { min: 0, max: H }, lifespan: 6000, speedX: { min: 6, max: 18 }, speedY: { min: -8, max: 4 },
-        scale: { start: 0.5, end: 0.2 }, alpha: { start: 0, end: 0.8, ease: 'Sine.easeInOut' }, tint: [0xfff6b0, 0xffffff], frequency: 160 }).setDepth(top);
-    } else if (amb === 'leaves') {
-      this.add.particles(0, 0, 'leaf', { x: { min: -50, max: W }, y: -20, lifespan: 9000, speedX: { min: 15, max: 45 }, speedY: { min: 35, max: 60 },
-        rotate: { min: 0, max: 360 }, scale: { min: 0.7, max: 1.2 }, alpha: { start: 1, end: 0.6 }, frequency: 380 }).setDepth(top);
-    } else if (amb === 'fireflies') {
-      this.add.particles(0, 0, 'glow', { ...common, x: { min: 0, max: W }, y: { min: 60, max: H }, lifespan: 4000, speedX: { min: -10, max: 10 }, speedY: { min: -12, max: 6 },
-        scale: { start: 0.14, end: 0.06 }, alpha: { start: 0, end: 1, ease: 'Sine.easeInOut' }, tint: [0xd8ff6a, 0xfff07a], frequency: 220 }).setDepth(top);
-      for (let i = 0; i < 4; i++) {
-        const fog = this.add.image(Math.random() * W, 120 + Math.random() * (H - 200), 'smoke').setScale(10, 4).setAlpha(0.09).setTint(0xdfffe8).setDepth(top - 1);
-        this.tweens.add({ targets: fog, x: fog.x + 200, duration: 20000 + i * 4000, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    const ADD = 'ADD' as const;
+    // moonlight from the upper right
+    this.add.image(W * 0.9, -40, 'glow').setBlendMode(Phaser.BlendModes.ADD).setTint(0xbfd8ff).setScale(14, 9).setAlpha(0.14).setDepth(top - 2);
+    // drifting moon motes everywhere
+    this.add.particles(0, 0, 'spark', { blendMode: ADD, x: { min: 0, max: W }, y: { min: 60, max: H }, lifespan: 6000, speedX: { min: -6, max: 6 }, speedY: { min: -14, max: -4 },
+      scale: { start: 0.5, end: 0.15 }, alpha: { start: 0, end: 0.9, ease: 'Sine.easeInOut' }, tint: [th.glow, 0xffffff], frequency: th.ambient === 'motes' ? 120 : 260 }).setDepth(top);
+    if (th.ambient === 'fireflies') {
+      this.add.particles(0, 0, 'glow', { blendMode: ADD, x: { min: 0, max: W }, y: { min: 60, max: H }, lifespan: 4000, speedX: { min: -10, max: 10 }, speedY: { min: -12, max: 6 },
+        scale: { start: 0.14, end: 0.06 }, alpha: { start: 0, end: 1, ease: 'Sine.easeInOut' }, tint: [0xd8ff6a, 0xfff07a], frequency: 200 }).setDepth(top);
+    }
+    if (th.ambient === 'mist' || th.ambient === 'fireflies' || th.ambient === 'motes') {
+      const n = th.ambient === 'mist' ? 6 : 3;
+      for (let i = 0; i < n; i++) {
+        const fog = this.add.image(Math.random() * W, 120 + Math.random() * (H - 200), 'smoke').setScale(11, 4).setAlpha(th.ambient === 'mist' ? 0.11 : 0.06).setTint(0xcfe6ff).setDepth(top - 1);
+        this.tweens.add({ targets: fog, x: fog.x + 220, duration: 22000 + i * 4000, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
       }
-    } else if (amb === 'snow') {
+    }
+    if (th.ambient === 'snow') {
       this.add.particles(0, 0, 'snowflake', { x: { min: -100, max: W }, y: -10, lifespan: 9000, speedX: { min: 5, max: 30 }, speedY: { min: 40, max: 75 },
         scale: { min: 0.4, max: 1.1 }, alpha: { min: 0.6, max: 1 }, frequency: 45 }).setDepth(top);
-    } else if (amb === 'embers') {
-      this.add.particles(0, 0, 'spark', { ...common, x: { min: 0, max: W }, y: H + 10, lifespan: 7000, speedX: { min: -12, max: 12 }, speedY: { min: -70, max: -35 },
-        scale: { start: 0.7, end: 0.1 }, alpha: { start: 1, end: 0 }, tint: [0xffa22a, 0xff5a1a, 0xffd36e], frequency: 90 }).setDepth(top);
     }
-    if (amb !== 'fireflies') {
-      for (let i = 0; i < 3; i++) {
-        const cs = this.add.image(-400 + i * 600, 150 + i * 190, 'cloudshadow').setScale(1.6).setAlpha(amb === 'embers' ? 0.16 : 0.1).setDepth(DEPTH.world - 1);
-        if (amb === 'embers') cs.setTint(0x3a1a10);
-        const drift = () => {
-          const dur = (W + 500 - cs.x) / (W + 900) * (70000 + i * 15000);
-          this.tweens.add({ targets: cs, x: W + 500, duration: dur, onComplete: () => { cs.x = -400; drift(); } });
-        };
-        drift();
-      }
+    if (th.ambient === 'blight') {
+      this.add.particles(0, 0, 'spark', { blendMode: ADD, x: { min: 0, max: W }, y: H + 10, lifespan: 7000, speedX: { min: -12, max: 12 }, speedY: { min: -60, max: -30 },
+        scale: { start: 0.7, end: 0.1 }, alpha: { start: 1, end: 0 }, tint: [0xc08cff, 0xff5ab0, 0x7a3aff], frequency: 90 }).setDepth(top);
     }
     this.add.image(0, 0, 'vignette').setOrigin(0).setDisplaySize(W, H).setDepth(top + 5);
   }
@@ -313,7 +345,7 @@ export class GameScene extends Phaser.Scene {
     if (!e.alive) return;
     const gain = e.def.gold;
     this.energy += gain;
-    this.fx.floatText(e.x, e.y - e.hitHeight - 20, `+${gain}`, '#9feaff', e.def.boss ? 26 : 15);
+    this.fx.floatText(e.x, e.y - e.hitHeight - 20, `+${gain}`, '#bffaff', e.def.boss ? 26 : 15);
     this.fx.death(e.body, e.x, e.y, e.def.key === 'wraith');
     this.fx.sparks(e.x, e.y - e.hitHeight, 0x9feaff, e.def.boss ? 16 : 4, 20);
     if (e.def.boss) { this.cameras.main.shake(400, 0.01); this.fx.explosion(e.x, e.y, 90); }
@@ -381,42 +413,27 @@ export class GameScene extends Phaser.Scene {
     this.hideCallButtons();
     sfx.wave();
     const boss = wave.some(g => ENEMIES[g[0]].boss);
-    this.toast(boss ? 'The Warlord approaches!' : this.waveIdx === this.totalWaves ? 'Final wave!' : `Wave ${this.waveIdx}`, 1600);
+    this.toast(boss ? 'The Hollow King approaches!' : this.waveIdx === this.totalWaves ? 'The final night!' : `${ORDINAL[this.waveIdx - 1]} Night`, 1600);
     if (this.tutorial === 2) { this.tutorial = 3; this.clearHint(); }
   }
 
-  private waveSummary(waveIndex: number, path: number): string {
-    const wave = this.level.waves[waveIndex];
-    if (!wave) return '';
-    const counts = new Map<string, number>();
-    for (const [key, count, , , p = 0] of wave) if (p === path) counts.set(key, (counts.get(key) ?? 0) + count);
-    return [...counts.entries()].map(([k, n]) => `${n} ${ENEMIES[k].short}`).join('\n');
-  }
 
-  private showCallButtons(first: boolean): void {
+
+  /** Blight portals mark where the next wave will come from (waves are called from the moon track). */
+  private showCallButtons(_first: boolean): void {
     this.hideCallButtons();
     const wave = this.level.waves[this.waveIdx];
     if (!wave) return;
     const usedPaths = [...new Set(wave.map(g => g[4] ?? 0))];
     for (const pi of usedPaths) {
       const { x, y } = callButtonPos(this.paths[pi]);
-      const c = this.add.container(x, y).setDepth(DEPTH.hud);
-      const g = this.add.graphics();
-      g.fillStyle(0x000000, 0.4); g.fillCircle(2, 4, 30);
-      g.fillStyle(0x2a0a40); g.fillCircle(0, 0, 30);
-      g.fillStyle(0x3a1a5a); g.fillCircle(0, -1, 26);
-      const icon = this.add.image(0, -1, 'icon_rift').setScale(1.0);
+      const c = this.add.container(x, y).setDepth(DEPTH.hud - 1);
+      const halo = this.add.image(0, 0, 'glow').setBlendMode(Phaser.BlendModes.ADD).setTint(0xa040ff).setScale(1.3).setAlpha(0.7);
+      const swirl = this.add.image(0, 0, 'icon_rift').setScale(0.95);
       const ring = this.add.graphics();
-      const hit = this.add.circle(0, 0, 34, 0x000000, 0).setInteractive({ useHandCursor: true });
-      // near the bottom edge the labels go above the button so they don't cover the ability buttons
-      const up = y > H - 170;
-      const label = txt(this, 0, up ? -44 : 44, first && this.waveIdx === 0 ? 'START!' : 'CALL', { size: 15, color: '#e0b0ff', strokeThickness: 3 });
-      const sum = this.waveSummary(this.waveIdx, pi);
-      const sumText = txt(this, 0, up ? -58 : 58, sum, { size: 12, color: '#ffffff', strokeThickness: 3 }).setOrigin(0.5, up ? 1 : 0);
-      c.add([g, ring, icon, hit, label, sumText]);
-      hit.on('pointerdown', () => unlockAudio());
-      hit.on('pointerup', () => this.startNextWave(true));
-      this.tweens.add({ targets: icon, angle: 360, duration: 4000, repeat: -1 });
+      c.add([halo, swirl, ring]);
+      this.tweens.add({ targets: swirl, angle: -360, duration: 5000, repeat: -1 });
+      this.tweens.add({ targets: halo, scale: 1.6, alpha: 0.4, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
       c.setScale(0);
       this.tweens.add({ targets: c, scale: 1, duration: 300, ease: 'Back.easeOut' });
       this.callButtons.push({ c, ring, path: pi });
@@ -448,13 +465,6 @@ export class GameScene extends Phaser.Scene {
     }
     if (this.nextWaveTimer >= 0) {
       this.nextWaveTimer -= dt;
-      for (const b of this.callButtons) {
-        b.ring.clear();
-        b.ring.lineStyle(5, 0xe0a0ff, 1);
-        b.ring.beginPath();
-        b.ring.arc(0, 0, 30, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.max(0, this.nextWaveTimer / WAVE_GAP), false);
-        b.ring.strokePath();
-      }
       if (this.nextWaveTimer <= 0) this.startNextWave(false);
     }
 
@@ -539,7 +549,7 @@ export class GameScene extends Phaser.Scene {
 
     const why = this.cantPlace(x, y, true);
     if (why) {
-      if (why !== 'hud') { sfx.error(); this.showInfo(why === 'power' ? 'No energy here' : why === 'full' ? 'Not enough capacity' : 'Can\'t build here', this.placeReason(why)); this.flashField(); }
+      if (why !== 'hud') { sfx.error(); this.showInfo(why === 'power' ? 'No moonlight here' : why === 'full' ? 'Not enough moonlight' : 'Can\'t plant here', this.placeReason(why)); this.flashField(); }
       else this.hideInfo();
       return;
     }
@@ -563,8 +573,8 @@ export class GameScene extends Phaser.Scene {
       case 'road': return 'Too close to the road.';
       case 'crowded': return 'Too close to another structure.';
       case 'edge': return 'Too close to the edge of the map.';
-      case 'full': return `Every source here is at full load (see the pips above it). The Cylinder powers ${CYLINDER_CAPACITY} crystals and each Pylon ${PYLON.capacity}. Build a Pylon, or fuse two crystals to free a slot.`;
-      default: return 'Build inside the glowing energy field. Place a Conduit Pylon at its edge to extend it.';
+      case 'full': return `Every light here is at full load (see the pips above it). The Moonwell feeds ${CYLINDER_CAPACITY} blooms and each Moth Lantern ${PYLON.capacity}. Hang a Lantern, or fuse two blooms to free a slot.`;
+      default: return 'Plant inside the Moonwell\'s glow. Hang a Moth Lantern at its edge to spread the light.';
     }
   }
 
@@ -611,8 +621,8 @@ export class GameScene extends Phaser.Scene {
       onSelect: () => { this.showInfo(`${PYLON.name}  ·  ${PYLON.cost}`, PYLON.blurb); this.drawRange(x, y, PYLON.field, 0x5ad0ff); },
       action: () => this.buildPylon(x, y),
     });
-    this.showInfo('Build', full ? 'All sources here are at full load: build a Pylon to power more crystals.'
-      : 'Crystals attack. Pylons extend the energy field.\nTap an option to see details, tap again to build.');
+    this.showInfo('Plant', full ? 'Every light here is at full load: hang a Moth Lantern to feed more blooms.'
+      : 'Blooms fight the Blight. Moth Lanterns spread the glow.\nTap a petal to see details, tap again to plant.');
     this.menu = new RadialMenu(this, x, y, opts, () => this.energy);
     if (this.tutorial === 1) this.clearHint();
   }
@@ -624,11 +634,11 @@ export class GameScene extends Phaser.Scene {
     const opts: RadialOption[] = [];
     opts.push({
       icon: 'icon_sell', iconSize: 34, angle: 90, priceLabel: `+${s.sellValue}`, confirm: true,
-      onSelect: () => this.showInfo('Dismantle', `Refund ${s.sellValue} energy. Tap again to confirm.`),
+      onSelect: () => this.showInfo('Uproot', `Returns ${s.sellValue} moonlight. Tap again to confirm.`),
       action: () => this.sell(s),
     });
     if (s instanceof Pylon) {
-      this.showInfo(PYLON.name, `${PYLON.blurb}\n${s.powered ? 'Powered.' : 'NOT powered: it is outside any powered field, or its conduit is cut.'}`);
+      this.showInfo(PYLON.name, `${PYLON.blurb}\n${s.powered ? 'Lit.' : 'DARK: it is outside the glow, or its moonbeam is snipped.'}`);
       this.drawRange(s.x, s.y, PYLON.field, 0x5ad0ff);
       this.network.showField(true);
     } else {
@@ -682,7 +692,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private spend(cost: number): boolean {
-    if (this.energy < cost) { sfx.error(); this.energyText.setColor('#ff5a5a'); this.time.delayedCall(300, () => this.energyText.setColor('#9feaff')); return false; }
+    if (this.energy < cost) { sfx.error(); this.energyText.setColor('#ff5a5a'); this.time.delayedCall(300, () => this.energyText.setColor('#bffaff')); return false; }
     this.energy -= cost;
     return true;
   }
@@ -708,7 +718,7 @@ export class GameScene extends Phaser.Scene {
     this.hideInfo();
     if (this.tutorial === 1) { this.tutorial = 2; this.time.delayedCall(400, () => this.showHint()); }
     if (!t.spec.fused && this.towers.some(o => o !== t && !o.spec.fused && dist(o.x, o.y, t.x, t.y) <= FUSE_RANGE)) {
-      this.tip('fuse', 'Fusion available!', 'Two crystals are side by side. Tap one to FUSE them into a more powerful elemental tower.');
+      this.tip('fuse', 'Fusion available!', 'Two blooms are side by side. Tap one to FUSE them into a more powerful elemental flower.');
     }
   }
 
@@ -750,7 +760,7 @@ export class GameScene extends Phaser.Scene {
     sfx.upgrade();
     this.closeMenu();
     this.hideInfo();
-    this.toast(TOWERS[id].name + '!', 1200, 150);
+    this.toast(TOWERS[id].name + '!', 1200, 170);
   }
 
   private removeStructure(s: Structure, puff = true): void {
@@ -782,7 +792,7 @@ export class GameScene extends Phaser.Scene {
     sfx.upgrade();
     this.fx.ring(this.endPt.x, this.endPt.y - 40, 160, 0x9feaff, 600);
     for (const t of this.towers) if (t.powered) this.fx.ring(t.x, t.y, 50, 0x9feaff, 500);
-    this.showInfo('Surge!', `Powered crystals fire twice as fast for ${SURGE_TIME} seconds.`);
+    this.showInfo('Surge!', `Lit blooms strike twice as fast for ${SURGE_TIME} seconds.`);
     this.time.delayedCall(1800, () => { if (!this.menu) this.hideInfo(); });
   }
 
@@ -808,77 +818,164 @@ export class GameScene extends Phaser.Scene {
   /* HUD                                                               */
   /* ================================================================ */
 
+  private moons: { img: Phaser.GameObjects.Image; x: number; y: number; base: number }[] = [];
+  private moonGfx!: Phaser.GameObjects.Graphics;
+  private moonHit!: Phaser.GameObjects.Arc;
+  private nightText!: Phaser.GameObjects.Text;
+  private nextText!: Phaser.GameObjects.Text;
+  private speedText!: Phaser.GameObjects.Text;
+
+  /** Interface A: moon-phase wave track (top centre) and a crescent dock (bottom centre). */
   private buildHud(): void {
     const d = DEPTH.hud;
-    panel(this, 10, 10, 420, 56).setDepth(d);
-    this.add.image(42, 38, 'icon_heart').setScale(0.7).setDepth(d);
-    this.livesText = txt(this, 66, 38, '', { size: 24 }).setOrigin(0, 0.5).setDepth(d);
-    this.add.image(152, 38, 'icon_energy').setScale(0.72).setDepth(d);
-    this.energyText = txt(this, 176, 38, '', { size: 24, color: '#9feaff' }).setOrigin(0, 0.5).setDepth(d);
-    this.add.image(290, 38, 'icon_rift').setScale(0.66).setDepth(d);
-    this.waveText = txt(this, 312, 38, '', { size: 22 }).setOrigin(0, 0.5).setDepth(d);
+    // ---- moon-phase wave track
+    const n = this.totalWaves;
+    const x0 = 432, x1 = 848;
+    const track = this.add.graphics().setDepth(d);
+    this.moons = [];
+    const pts: Pt[] = [];
+    for (let i = 0; i < n; i++) {
+      const t = n === 1 ? 0.5 : i / (n - 1);
+      pts.push({ x: x0 + (x1 - x0) * t, y: 30 + 12 * Math.sin(Math.PI * t) });
+    }
+    track.lineStyle(1.5, 0xcfe6f0, 0.4);
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = pts[i], b = pts[i + 1];
+      for (let k = 0; k < 5; k++) { const t0 = k / 5 + 0.05, t1 = t0 + 0.08; track.lineBetween(a.x + (b.x - a.x) * t0, a.y + (b.y - a.y) * t0, a.x + (b.x - a.x) * t1, a.y + (b.y - a.y) * t1); }
+    }
+    const base = n > 10 ? 0.66 : 0.78;
+    pts.forEach((p, i) => {
+      const k = Math.max(1, Math.round(((i + 1) / n) * 10));
+      this.moons.push({ img: this.add.image(p.x, p.y, `moon_${k}`).setScale(base).setDepth(d + 1), x: p.x, y: p.y, base });
+    });
+    this.moonGfx = this.add.graphics().setDepth(d + 2);
+    this.moonHit = this.add.circle(0, 0, 24, 0x000000, 0).setDepth(d + 3).setInteractive({ useHandCursor: true });
+    this.moonHit.on('pointerdown', () => unlockAudio());
+    this.moonHit.on('pointerup', () => { if (!this.paused && !this.ended) this.startNextWave(true); });
+    this.nightText = txt(this, W / 2, 80, '', { size: 16, color: '#e6f6ff', strokeThickness: 4 }).setDepth(d);
+    this.nextText = txt(this, W / 2, 100, '', { size: 12, color: '#ff9ae6', strokeThickness: 3, body: true }).setDepth(d);
 
-    this.speedBtn = iconButton(this, W - 100, 40, 28, 'icon_play', () => {
+    // ---- crescent dock
+    const dock = this.add.graphics().setDepth(d);
+    const curve = new Phaser.Curves.CubicBezier(new Phaser.Math.Vector2(392, 724), new Phaser.Math.Vector2(432, 618), new Phaser.Math.Vector2(848, 618), new Phaser.Math.Vector2(888, 724));
+    const arc = curve.getPoints(40);
+    dock.fillStyle(0x0e1630, 0.9); dock.fillPoints(arc, true);
+    dock.lineStyle(2.5, 0x7af0e0, 0.9); dock.strokePoints(arc, false);
+    const inner = new Phaser.Curves.CubicBezier(new Phaser.Math.Vector2(412, 724), new Phaser.Math.Vector2(452, 636), new Phaser.Math.Vector2(828, 636), new Phaser.Math.Vector2(868, 724)).getPoints(60);
+    dock.lineStyle(1, 0xcfe6f0, 0.35);
+    for (let i = 0; i < inner.length - 1; i += 2) dock.lineBetween(inner[i].x, inner[i].y, inner[i + 1].x, inner[i + 1].y);
+    // moonlight (energy)
+    this.add.image(W / 2, 666, 'icon_drop').setScale(1.05).setDepth(d + 1);
+    this.energyText = txt(this, W / 2, 703, '', { size: 22, color: '#bffaff', strokeThickness: 4 }).setDepth(d + 1);
+    // Surge and Nova as leaves
+    this.surgeBtn = this.leafButton(548, 676, -35, 0x1f5a6a, 0x7af0e0, 'glyph_bolt', 'SURGE', () => this.useSurge());
+    this.novaBtn = this.leafButton(732, 676, 35, 0x3a2a6a, 0xb08aff, 'glyph_nova', 'NOVA', () => this.useNova());
+    this.abilityGfx = this.add.graphics().setDepth(d + 2);
+    // speed (moth) and pause at the tips
+    this.add.image(468, 704, 'glyph_moth').setDepth(d + 1);
+    this.speedText = txt(this, 468, 686, '×1', { size: 12, color: '#cfe6f0', strokeThickness: 3 }).setDepth(d + 1);
+    const sp = this.add.circle(468, 698, 24, 0x000000, 0).setDepth(d + 3).setInteractive({ useHandCursor: true });
+    sp.on('pointerdown', () => unlockAudio());
+    sp.on('pointerup', () => {
+      sfx.click();
       this.speed = this.speed === 1 ? 2 : 1;
-      this.speedBtn.icon.setTexture(this.speed === 1 ? 'icon_play' : 'icon_ff');
+      this.speedText.setText(`×${this.speed}`);
       this.tweens.timeScale = this.speed;
       this.time.timeScale = this.speed;
       this.anims.globalTimeScale = this.speed;
     });
-    this.speedBtn.setDepth(d);
-    iconButton(this, W - 38, 40, 28, 'icon_pause', () => this.pause()).setDepth(d);
-
-    this.surgeBtn = this.abilityButton(56, H - 56, 'icon_surge', () => this.useSurge());
-    this.novaBtn = this.abilityButton(146, H - 56, 'icon_nova', () => this.useNova());
-    this.abilityGfx = this.add.graphics().setDepth(d + 2);
+    const pg = this.add.graphics().setDepth(d + 1);
+    pg.fillStyle(0xcfe6f0); pg.fillRoundedRect(804, 690, 5, 18, 2); pg.fillRoundedRect(815, 690, 5, 18, 2);
+    const ph = this.add.circle(812, 699, 24, 0x000000, 0).setDepth(d + 3).setInteractive({ useHandCursor: true });
+    ph.on('pointerdown', () => unlockAudio());
+    ph.on('pointerup', () => { sfx.click(); this.pause(); });
 
     // info bar
     this.info = this.add.container(W / 2, H - 52).setDepth(d + 5).setVisible(false);
     this.infoBg = this.add.graphics();
-    this.infoTitle = txt(this, 0, -22, '', { size: 19, color: '#ffe26a' });
+    this.infoTitle = txt(this, 0, -22, '', { size: 18, color: '#ffd0f4' });
     this.infoBody = txt(this, 0, -6, '', { size: 15, wrap: 600, strokeThickness: 3 }).setOrigin(0.5, 0);
     this.info.add([this.infoBg, this.infoTitle, this.infoBody]);
   }
 
-  private abilityButton(x: number, y: number, icon: string, onUse: () => void): Phaser.GameObjects.Container {
-    const c = this.add.container(x, y).setDepth(DEPTH.hud);
+  /** A leaf-shaped power button for the crescent dock. */
+  private leafButton(x: number, y: number, rot: number, fill: number, edge: number, glyph: string, label: string, onUse: () => void): Phaser.GameObjects.Container {
+    const c = this.add.container(x, y).setDepth(DEPTH.hud + 1);
+    const glow = this.add.image(0, 0, 'glow').setBlendMode(Phaser.BlendModes.ADD).setTint(edge).setScale(1.25).setAlpha(0.5);
     const g = this.add.graphics();
-    g.fillStyle(0x000000, 0.4); g.fillCircle(2, 5, 38);
-    g.fillStyle(0x10283a); g.fillCircle(0, 0, 38);
-    g.fillStyle(0x1f4a66); g.fillCircle(0, -1, 34);
-    g.lineStyle(3, 0x9feaff); g.strokeCircle(0, -1, 34);
-    const img = this.add.image(0, -1, icon).setScale(0.85);
-    const hit = this.add.circle(0, 0, 40, 0x000000, 0).setInteractive({ useHandCursor: true });
+    const pts = leafPoints(rot, 76, 50);
+    g.fillStyle(fill, 1); g.fillPoints(pts, true);
+    g.lineStyle(2.5, edge, 1); g.strokePoints(pts, true);
+    g.lineStyle(1, 0xffffff, 0.25);
+    const r = Phaser.Math.DegToRad(rot - 90);
+    g.lineBetween(Math.cos(r) * -30, Math.sin(r) * -30, Math.cos(r) * 30, Math.sin(r) * 30);
+    const img = this.add.image(0, -2, glyph).setScale(0.9);
+    const t = txt(this, 0, 40, label, { size: 10, color: Phaser.Display.Color.IntegerToColor(edge).rgba, strokeThickness: 3 });
+    const hit = this.add.circle(0, 0, 34, 0x000000, 0).setInteractive({ useHandCursor: true });
     hit.on('pointerdown', () => unlockAudio());
     hit.on('pointerup', onUse);
-    c.add([g, img, hit]);
+    c.add([glow, g, img, t, hit]);
+    c.setData('glow', glow);
     return c;
   }
 
   private refreshHud(): void {
-    if (this.shown.lives !== this.lives) { this.shown.lives = this.lives; this.livesText.setText(String(this.lives)); }
+    if (this.shown.lives !== this.lives) { this.shown.lives = this.lives; this.refreshLives(); }
     const en = Math.floor(this.energy);
     if (this.shown.energy !== en) { this.shown.energy = en; this.energyText.setText(String(en)); }
-    if (this.shown.wave !== this.waveIdx) { this.shown.wave = this.waveIdx; this.waveText.setText(`Wave ${this.waveIdx}/${this.totalWaves}`); }
+    if (this.shown.wave !== this.waveIdx) { this.shown.wave = this.waveIdx; this.refreshMoons(); }
     this.menu?.refresh();
 
-    const g = this.abilityGfx;
+    // moon track: glow on the current night, countdown on the next
+    const g = this.moonGfx;
     g.clear();
-    const items: [Phaser.GameObjects.Container, number, number][] = [[this.surgeBtn, this.surgeCd, SURGE_CD], [this.novaBtn, this.novaCd, NOVA_CD]];
-    for (const [btn, cd, max] of items) {
-      if (cd > 0) {
-        g.fillStyle(0x000000, 0.6);
-        g.slice(btn.x, btn.y - 1, 34, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (cd / max), false);
-        g.fillPath();
-      } else {
-        g.lineStyle(4, 0x9feaff, 0.35 + Math.sin(this.time.now / 300) * 0.25);
-        g.strokeCircle(btn.x, btn.y - 1, 40);
+    const cur = this.moons[this.waveIdx - 1];
+    if (cur) { g.lineStyle(2, 0x7af0e0, 0.9); g.strokeCircle(cur.x, cur.y, 15); }
+    const next = this.moons[this.waveIdx];
+    if (next && !this.ended) {
+      g.lineStyle(2, 0x3a4a6a, 1); g.strokeCircle(next.x, next.y, 15);
+      if (this.waveIdx === 0 || this.nextWaveTimer >= 0) {
+        const f = this.waveIdx === 0 ? 1 : Math.max(0, this.nextWaveTimer / WAVE_GAP);
+        g.lineStyle(3, 0xff6ad8, this.waveIdx === 0 ? 0.6 + Math.sin(this.time.now / 200) * 0.4 : 1);
+        g.beginPath(); g.arc(next.x, next.y, 15, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * f, false); g.strokePath();
       }
     }
-    if (this.surgeT > 0) { g.lineStyle(5, 0xffffff, 0.9); g.strokeCircle(this.surgeBtn.x, this.surgeBtn.y - 1, 42); }
+
+    // power cooldowns
+    const a = this.abilityGfx;
+    a.clear();
+    const items: [Phaser.GameObjects.Container, number, number][] = [[this.surgeBtn, this.surgeCd, SURGE_CD], [this.novaBtn, this.novaCd, NOVA_CD]];
+    for (const [btn, cd, max] of items) {
+      const glow = btn.getData('glow') as Phaser.GameObjects.Image;
+      if (cd > 0) {
+        glow.setVisible(false);
+        a.fillStyle(0x000000, 0.55);
+        a.slice(btn.x, btn.y - 2, 30, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (cd / max), false);
+        a.fillPath();
+      } else {
+        glow.setVisible(true).setAlpha(0.35 + Math.sin(this.time.now / 300) * 0.2);
+      }
+    }
+    if (this.surgeT > 0) { a.lineStyle(4, 0xffffff, 0.9); a.strokeCircle(this.surgeBtn.x, this.surgeBtn.y - 2, 38); }
     if (this.selectedEnemy && this.selectedEnemy.alive && Math.floor(this.time.now / 200) !== Math.floor((this.time.now - 17) / 200)) {
       this.showEnemyInfo(this.selectedEnemy);
     }
+  }
+
+  private refreshMoons(): void {
+    const n = this.totalWaves;
+    this.moons.forEach((m, i) => {
+      const done = i < this.waveIdx - 1, cur = i === this.waveIdx - 1;
+      m.img.clearTint().setAlpha(1).setScale(m.base * (cur ? 1.25 : 1));
+      if (!done && !cur) m.img.setTint(0x6a7a9a).setAlpha(0.8);
+    });
+    const next = this.moons[this.waveIdx];
+    if (next) this.moonHit.setPosition(next.x, next.y).setVisible(true);
+    else this.moonHit.setVisible(false).setPosition(-100, -100);
+    this.nightText.setText(this.waveIdx === 0 ? 'Tap the moon to begin the first night'
+      : `${ORDINAL[this.waveIdx - 1]} Night of ${NUMBER_WORD[n - 1]}`);
+    const sum = this.waveIdx < n ? this.level.waves[this.waveIdx].reduce((m, [k, c]) => m.set(k, (m.get(k) ?? 0) + c), new Map<string, number>()) : null;
+    this.nextText.setText(sum ? `Next: ${[...sum.entries()].map(([k, c]) => `${c} ${ENEMIES[k].short}`).join(' · ')}` : '');
   }
 
   private showSpecInfo(spec: TowerSpec, cost: number, prefix = ''): void {
@@ -886,7 +983,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private showTowerInfo(t: Tower): void {
-    const power = t.powered ? '' : '\nNO POWER: this crystal is outside the field or its conduit is cut.';
+    const power = t.powered ? '' : '\nDARK: this bloom is outside the glow, or its moonbeam is snipped.';
     const fuse = !t.spec.fused && this.towers.some(o => o !== t && !o.spec.fused && dist(o.x, o.y, t.x, t.y) <= FUSE_RANGE)
       ? '\nTap a fusion option to merge with a neighbour.' : '';
     const rank = t.rank ? `  (attuned ${t.rank}/${ATTUNE_MAX})` : '';
@@ -943,27 +1040,27 @@ export class GameScene extends Phaser.Scene {
       x = s.x; y = s.y; msg = 'Tap inside the glowing field to build';
       this.network.showField(true);
     } else if (this.tutorial === 2) {
-      const b = this.callButtons[0];
-      if (!b) return;
-      x = b.c.x; y = b.c.y; msg = 'Tap the rift to start the first wave';
+      const m = this.moons[0];
+      if (!m) return;
+      x = m.x; y = m.y; msg = 'Tap the moon to begin the first night';
     } else return;
     const c = this.add.container(x, y).setDepth(DEPTH.hud + 3);
     // arrow drawn pointing down at the origin, then rotated to face the target
-    const arrow = this.add.triangle(0, 0, -14, -16, 14, -16, 0, 6, 0xffe26a).setStrokeStyle(3, 0x1a1208);
+    const arrow = this.add.triangle(0, 0, -14, -16, 14, -16, 0, 6, 0xff9ae6).setStrokeStyle(3, 0x0a0f1a);
     let label: Phaser.GameObjects.Text;
     if (this.tutorial === 2) {
-      const side = x < W / 2 ? 1 : -1;      // point sideways at the call button
-      arrow.setPosition(side * 52, 0).setAngle(side * 90);
-      label = txt(this, side * 70, 0, msg, { size: 20, color: '#ffe26a' }).setOrigin(side > 0 ? 0 : 1, 0.5);
-      this.tweens.add({ targets: arrow, x: side * 44, duration: 450, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      // point up at the first moon, below the track's own labels
+      arrow.setPosition(0, 104).setAngle(180);
+      label = txt(this, 0, 140, msg, { size: 20, color: '#ffd0f4' });
+      this.tweens.add({ targets: arrow, y: 94, duration: 450, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     } else {
       const below = y < 230;
       arrow.setPosition(0, below ? 30 : -30).setAngle(below ? 180 : 0);
-      label = txt(this, 0, below ? 70 : -66, msg, { size: 20, color: '#ffe26a' });
+      label = txt(this, 0, below ? 70 : -66, msg, { size: 20, color: '#ffd0f4' });
       if (x > W - 220) label.setOrigin(1, 0.5).setX(30);
       if (x < 220) label.setOrigin(0, 0.5).setX(-30);
       this.tweens.add({ targets: arrow, y: below ? 18 : -18, duration: 450, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-      const ring = this.add.ellipse(0, 0, 70, 26).setStrokeStyle(3, 0xffe26a);
+      const ring = this.add.ellipse(0, 0, 70, 26).setStrokeStyle(3, 0xff9ae6);
       c.add(ring);
       this.tweens.add({ targets: ring, scale: 1.3, alpha: 0.3, duration: 700, yoyo: true, repeat: -1 });
     }
@@ -984,12 +1081,14 @@ export class GameScene extends Phaser.Scene {
     const h = -top - 6 + this.infoBody.height + 12;
     this.infoBg.clear();
     this.infoBg.fillStyle(0x000000, 0.35); this.infoBg.fillRoundedRect(-w / 2 + 3, top + 4, w, h, 12);
-    this.infoBg.fillStyle(0x1f150c, 0.92); this.infoBg.fillRoundedRect(-w / 2, top, w, h, 12);
-    this.infoBg.lineStyle(2, 0xd4a017, 0.8); this.infoBg.strokeRoundedRect(-w / 2, top, w, h, 12);
+    this.infoBg.fillStyle(0x141c34, 0.94); this.infoBg.fillRoundedRect(-w / 2, top, w, h, 12);
+    this.infoBg.lineStyle(2, 0xff9ae6, 0.8); this.infoBg.strokeRoundedRect(-w / 2, top, w, h, 12);
     // keep the info bar away from the open menu / selected enemy
     const focusY = this.menuAt?.y ?? this.selectedEnemy?.y ?? 0;
-    const atTop = focusY > H - 230;
-    this.info.setPosition(W / 2, atTop ? 92 - top : H - 10 - (h + top));
+    // keep clear of the Moonwell too when it sits low and central
+    const wellLow = this.endPt.y > H - 260 && Math.abs(this.endPt.x - W / 2) < 380;
+    const atTop = focusY > H - 260 || (focusY === 0 && wellLow);
+    this.info.setPosition(W / 2, atTop ? (this.introCard?.active ? 252 : 122) - top : H - 112 - (h + top));
     this.info.setVisible(true);
   }
 
@@ -1005,7 +1104,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   toast(msg: string, ms = 1500, y = 120): void {
-    const t = txt(this, W / 2, y, msg, { size: 40, color: '#ffe26a', strokeThickness: 6 }).setDepth(DEPTH.hud + 10).setAlpha(0).setScale(0.6);
+    const t = txt(this, W / 2, y, msg, { size: 38, color: '#e6f6ff', strokeThickness: 6 }).setDepth(DEPTH.hud + 10).setAlpha(0).setScale(0.6);
     this.tweens.add({ targets: t, alpha: 1, scale: 1, duration: 250, ease: 'Back.easeOut' });
     this.tweens.add({ targets: t, alpha: 0, y: y - 20, delay: ms, duration: 400, onComplete: () => t.destroy() });
   }
@@ -1015,15 +1114,15 @@ export class GameScene extends Phaser.Scene {
   private introduceEnemy(key: string): void {
     const def = ENEMIES[key];
     if (this.introCard?.active) this.introCard.destroy();
-    const c = this.add.container(W / 2, 175).setDepth(DEPTH.hud + 8);
+    const c = this.add.container(W / 2, 182).setDepth(DEPTH.hud + 8);
     this.introCard = c;
     const g = this.add.graphics();
     g.fillStyle(0x000000, 0.35); g.fillRoundedRect(-283, -42, 570, 92, 14);
-    g.fillStyle(0x1f150c, 0.95); g.fillRoundedRect(-285, -46, 570, 92, 14);
-    g.lineStyle(3, 0xe8384a); g.strokeRoundedRect(-285, -46, 570, 92, 14);
+    g.fillStyle(0x141c34, 0.96); g.fillRoundedRect(-285, -46, 570, 92, 14);
+    g.lineStyle(3, 0xb08aff); g.strokeRoundedRect(-285, -46, 570, 92, 14);
     const img = this.add.image(-238, 6, `enemy_${key}_0`);
     img.setScale(Math.min(1.5, 80 / Math.max(img.width, img.height)));
-    const title = txt(this, -190, -22, `NEW ENEMY: ${def.name}`, { size: 20, color: '#ff8a7a' }).setOrigin(0, 0.5);
+    const title = txt(this, -190, -22, `THE BLIGHT: ${def.name}`, { size: 19, color: '#d8c0ff' }).setOrigin(0, 0.5);
     const body = txt(this, -190, 2, def.tip, { size: 15, wrap: 460, strokeThickness: 3, align: 'left' }).setOrigin(0, 0);
     const hit = this.add.rectangle(0, 0, 570, 92, 0x000000, 0).setInteractive();
     c.add([g, img, title, body, hit]);
@@ -1048,7 +1147,7 @@ export class GameScene extends Phaser.Scene {
     const dim = this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.6).setInteractive();
     c.add(dim);
     c.add(panel(this, W / 2 - 200, H / 2 - 210, 400, 420));
-    c.add(txt(this, W / 2, H / 2 - 165, 'Paused', { size: 40, color: '#ffe26a' }));
+    c.add(txt(this, W / 2, H / 2 - 165, 'Paused', { size: 40, color: '#e6f6ff' }));
     const soundBtn = button(this, W / 2, H / 2 + 80, 280, 60, isMuted() ? 'Sound: Off' : 'Sound: On', () => {
       setMuted(!isMuted());
       soundBtn.label.setText(isMuted() ? 'Sound: Off' : 'Sound: On');
@@ -1110,8 +1209,8 @@ export class GameScene extends Phaser.Scene {
   private showEndScreen(victory: boolean, stars: number): void {
     const c = this.add.container(0, 0).setDepth(DEPTH.modal);
     c.add(this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.6).setInteractive());
-    c.add(panel(this, W / 2 - 260, H / 2 - 220, 520, 440, victory ? 0x2f4a1f : 0x4a1f1f));
-    c.add(txt(this, W / 2, H / 2 - 165, victory ? 'Victory!' : 'The Cylinder has fallen!', { size: victory ? 52 : 36, color: victory ? '#ffe26a' : '#ff8a7a', strokeThickness: 6 }));
+    c.add(panel(this, W / 2 - 260, H / 2 - 220, 520, 440, victory ? 0x1a2a4a : 0x2a1a3a));
+    c.add(txt(this, W / 2, H / 2 - 165, victory ? 'Dawn breaks!' : 'The Moonwell has gone dark', { size: victory ? 48 : 34, color: victory ? '#ffe9a8' : '#ff9ae6', strokeThickness: 6 }));
     if (victory) {
       for (let i = 0; i < 3; i++) {
         const sx = W / 2 + (i - 1) * 100, sy = H / 2 - 70 - (i === 1 ? 14 : 0);
@@ -1122,11 +1221,11 @@ export class GameScene extends Phaser.Scene {
           this.tweens.add({ targets: s, scale: 1.6, duration: 350, delay: 300 + i * 300, ease: 'Back.easeOut', onStart: () => sfx.coin() });
         }
       }
-      c.add(txt(this, W / 2, H / 2 + 20, `Cylinder integrity: ${this.lives}/${this.level.lives}`, { size: 22 }));
-      c.add(txt(this, W / 2, H / 2 + 52, stars < 3 ? 'Lose 2 or fewer lives for 3 stars.' : this.lives === this.level.lives ? 'Flawless defense!' : 'Superb defense!', { size: 16, color: '#cccccc', strokeThickness: 3 }));
+      c.add(txt(this, W / 2, H / 2 + 20, `Petals remaining: ${this.lives}/${this.level.lives}`, { size: 22 }));
+      c.add(txt(this, W / 2, H / 2 + 52, stars < 3 ? 'Lose 2 or fewer petals for 3 stars.' : this.lives === this.level.lives ? 'Flawless defense!' : 'Superb defense!', { size: 16, color: '#cccccc', strokeThickness: 3 }));
     } else {
-      c.add(txt(this, W / 2, H / 2 - 60, `You held out until wave ${this.waveIdx} of ${this.totalWaves}.`, { size: 22 }));
-      c.add(txt(this, W / 2, H / 2 - 10, 'Tip: mix elements (armor shrugs off boulders, shamans resist magic)\nand keep your conduits away from bats and wraiths.', { size: 16, color: '#dddddd', strokeThickness: 3 }));
+      c.add(txt(this, W / 2, H / 2 - 60, `You held out until night ${this.waveIdx} of ${this.totalWaves}.`, { size: 22 }));
+      c.add(txt(this, W / 2, H / 2 - 10, 'Tip: mix elements (bark armor shrugs off stones, witches resist magic)\nand keep moonbeams away from moths and wisps.', { size: 16, color: '#dddddd', strokeThickness: 3 }));
     }
     const hasNext = victory && this.levelIndex < LEVELS.length - 1;
     const by = H / 2 + 140;
@@ -1139,7 +1238,7 @@ export class GameScene extends Phaser.Scene {
       c.add(button(this, W / 2 + 95, by, 170, 60, 'Retry', () => this.restart(), victory ? 0x8a6a2a : 0x4a8a2a, 22));
     }
     if (victory && this.levelIndex === LEVELS.length - 1) {
-      c.add(txt(this, W / 2, H / 2 + 88, 'You defeated the Warlord! The realm is safe.', { size: 18, color: '#ffe26a', strokeThickness: 3 }));
+      c.add(txt(this, W / 2, H / 2 + 88, 'The Hollow King is no more. The glade is safe.', { size: 18, color: '#ffe26a', strokeThickness: 3 }));
     }
     c.setAlpha(0);
     this.tweens.add({ targets: c, alpha: 1, duration: 300 });

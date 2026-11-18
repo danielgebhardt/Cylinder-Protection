@@ -4,7 +4,7 @@ const config: CapacitorConfig = {
   appId: 'com.danielgebhardt.cylinderprotection',
   appName: 'Cylinder Protection',
   webDir: 'dist',
-  backgroundColor: '#1b2a1a',
+  backgroundColor: '#0c1428',
   android: {
     allowMixedContent: false,
   },

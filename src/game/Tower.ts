@@ -177,6 +177,7 @@ export class Tower implements PowerNode {
   private applyPowerLook(): void {
     const on = this.powered;
     this.crystal.setTint(on ? 0xffffff : 0x55556a);
+    if (!on) this.world.fx.puff(this.crystalPos.x, this.crystalPos.y, 0x6a6a8a, 0.5);
     this.glow.setVisible(on);
     this.motes.forEach(m => m.setVisible(on));
     this.orbiters.forEach(o => o.setTint(on ? 0xffffff : 0x55556a));
@@ -211,8 +212,10 @@ export class Tower implements PowerNode {
 
   private animate(): void {
     const base = this.crystalPos;
-    const bob = this.powered ? Math.sin(this.phase * 2.2) * 3 : 4;
+    // flowers sway on their stems; an unlit bloom droops
+    const bob = this.powered ? Math.sin(this.phase * 2.2) * 1.2 : 3;
     this.crystal.y = base.y + bob;
+    this.crystal.rotation = this.powered ? Math.sin(this.phase * 1.6) * 0.09 : 0.35;
     this.glow.y = base.y + bob;
     if (this.powered) this.glow.setAlpha(0.55 + Math.sin(this.phase * 3.4) * 0.15);
     this.orbiters.forEach((o, i) => {

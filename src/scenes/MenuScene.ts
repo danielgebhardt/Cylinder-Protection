@@ -26,9 +26,9 @@ export class MenuScene extends Phaser.Scene {
     setupCamera(this);
     this.anims.globalTimeScale = 1;
     this.drawMap();
-    const title = txt(this, W / 2, 62, 'Cylinder Protection', { size: 58, color: '#ffe26a', stroke: '#3b2a1a', strokeThickness: 10 });
+    const title = txt(this, W / 2, 62, 'Cylinder Protection', { size: 54, color: '#e6f6ff', stroke: '#0e1630', strokeThickness: 10 });
     this.tweens.add({ targets: title, scale: 1.03, duration: 1600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-    txt(this, W / 2, 112, 'Defend the ancient Cylinder from the Warlord\'s horde', { size: 20, color: '#fff4d6', stroke: '#3b2a1a', strokeThickness: 5 });
+    txt(this, W / 2, 112, 'Keep the Moonwell shining through the Blight', { size: 20, color: '#ffd0f4', stroke: '#0e1630', strokeThickness: 5 });
 
     const stars = totalStars();
     panel(this, W - 190, 150, 170, 52);
@@ -63,13 +63,13 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private drawMap(): void {
-    if (!this.textures.exists('worldmap')) paintWorldMap(this, LEVELS.map(l => l.mapPos));
+    if (!this.textures.exists('worldmap')) paintWorldMap(this, LEVELS.map(l => l.mapPos), LEVELS.map(l => l.theme.groundLight));
     this.add.image(0, 0, 'worldmap').setOrigin(0);
     // scenery per region
     const rng = seeded(7);
     const regionDecor: [number, number, string[]][] = [
-      [210, 470, ['tree', 'tree', 'bush', 'pine']], [430, 330, ['autumn', 'autumn', 'tree']], [660, 470, ['deadtree', 'pine', 'crystal']],
-      [870, 300, ['snowpine', 'snowpine']], [1070, 460, ['deadtree', 'rock', 'lava']],
+      [210, 470, ['glowtree', 'glowtree', 'mushroom', 'fern']], [430, 330, ['reeds', 'glowtree', 'mushroom']], [660, 470, ['glowtree', 'runestone', 'crystal']],
+      [870, 300, ['frostpine', 'frostpine', 'runestone']], [1070, 460, ['blighttree', 'thornbush', 'blighttree']],
     ];
     const items: { x: number; y: number; k: string }[] = [];
     for (const [cx, cy, kinds] of regionDecor) {
@@ -82,16 +82,19 @@ export class MenuScene extends Phaser.Scene {
     }
     items.sort((a, b) => a.y - b.y).forEach(it => {
       const img = this.add.image(it.x, it.y, `decor_${it.k}`).setOrigin(0.5, 66 / 72).setScale(0.55);
-      if (it.k !== 'rock' && it.k !== 'lava' && it.k !== 'crystal') this.tweens.add({ targets: img, angle: { from: -1.5, to: 1.5 }, duration: 1800 + rng() * 1200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      if (it.k !== 'runestone' && it.k !== 'crystal' && it.k !== 'mushroom') this.tweens.add({ targets: img, angle: { from: -1.5, to: 1.5 }, duration: 1800 + rng() * 1200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     });
-    // the Cylinder, glowing on its hill
-    const glow = this.add.image(1180, 280, 'glow').setBlendMode(Phaser.BlendModes.ADD).setTint(0x5ad0ff).setScale(2.4).setAlpha(0.5);
-    this.tweens.add({ targets: glow, scale: 2.9, alpha: 0.25, duration: 1500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-    const cyl = this.add.image(1180, 330, 'cylinder').setOrigin(0.5, 132 / 140).setScale(0.75);
-    this.tweens.add({ targets: cyl, y: 324, duration: 1800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-    // drifting clouds
+    // the Moonwell, shining on its hill
+    const glow = this.add.image(1180, 300, 'glow').setBlendMode(Phaser.BlendModes.ADD).setTint(0xbfe8ff).setScale(2.6).setAlpha(0.55);
+    this.tweens.add({ targets: glow, scale: 3.1, alpha: 0.3, duration: 1500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    const beam = this.add.image(1180, 230, 'glow').setBlendMode(Phaser.BlendModes.ADD).setTint(0xe8f4ff).setScale(0.7, 4).setAlpha(0.3);
+    this.tweens.add({ targets: beam, alpha: 0.15, duration: 2000, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    this.add.image(1180, 330, 'moonwell').setOrigin(0.5, 96 / 110).setScale(0.75);
+    this.add.particles(1180, 300, 'spark', { x: { min: -24, max: 24 }, speedY: { min: -40, max: -15 }, lifespan: 2000, scale: { start: 0.7, end: 0 },
+      alpha: { start: 1, end: 0 }, tint: [0xffffff, 0xff9ae6], blendMode: 'ADD', frequency: 160 });
+    // drifting mist
     for (let i = 0; i < 5; i++) {
-      const c = this.add.image(rng() * W, 160 + rng() * 480, 'smoke').setScale(4 + rng() * 3, 1.6 + rng()).setAlpha(0.35).setDepth(5);
+      const c = this.add.image(rng() * W, 160 + rng() * 480, 'smoke').setScale(4 + rng() * 3, 1.6 + rng()).setAlpha(0.12).setTint(0xcfe6ff).setDepth(5);
       this.tweens.add({ targets: c, x: c.x + 160, duration: 14000 + rng() * 8000, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     }
     this.add.image(0, 0, 'vignette').setOrigin(0).setDisplaySize(W, H).setDepth(6);
@@ -106,9 +109,10 @@ export class MenuScene extends Phaser.Scene {
       const c = this.add.container(x, y);
       const g = this.add.graphics();
       g.fillStyle(0x000000, 0.4); g.fillEllipse(3, 30, 70, 20);
-      g.fillStyle(unlocked ? 0x8f2a2a : 0x4a4a4a); g.fillCircle(0, 0, 34);
-      g.fillStyle(unlocked ? 0xc0392b : 0x6a6a6a); g.fillCircle(0, -2, 29);
-      g.lineStyle(4, unlocked ? 0xd4a017 : 0x8a8a8a); g.strokeCircle(0, -2, 29);
+      g.fillStyle(unlocked ? 0x0e1630 : 0x2a2a34); g.fillCircle(0, 0, 34);
+      g.fillStyle(unlocked ? 0x1f3a5a : 0x4a4a54); g.fillCircle(0, -2, 29);
+      g.lineStyle(3, unlocked ? 0x7af0e0 : 0x7a7a8a); g.strokeCircle(0, -2, 29);
+      if (unlocked) { g.lineStyle(6, 0x7af0e0, 0.25); g.strokeCircle(0, -2, 33); }
       c.add(g);
       if (unlocked) c.add(txt(this, 0, -2, String(i + 1), { size: 30 }));
       else c.add(this.add.image(0, -2, 'icon_lock').setScale(0.8));
@@ -122,7 +126,7 @@ export class MenuScene extends Phaser.Scene {
         this.openBrief(i);
       });
       if (unlocked && stars === 0) {
-        const ring = this.add.circle(x, y - 2, 34).setStrokeStyle(4, 0xffe26a);
+        const ring = this.add.circle(x, y - 2, 34).setStrokeStyle(4, 0xff9ae6);
         this.tweens.add({ targets: ring, scale: 1.5, alpha: 0, duration: 1100, repeat: -1 });
       }
       if (i === this.focus) this.tweens.add({ targets: c, scale: 1.12, duration: 300, yoyo: true });
@@ -139,13 +143,13 @@ export class MenuScene extends Phaser.Scene {
     c.add(panel(this, W / 2 - 300, H / 2 - 230, 600, 460));
     const block = this.add.rectangle(W / 2, H / 2, 600, 460, 0x000000, 0).setInteractive();
     c.add(block);
-    c.add(txt(this, W / 2, H / 2 - 185, `${i + 1}. ${lvl.name}`, { size: 34, color: '#ffe26a' }));
+    c.add(txt(this, W / 2, H / 2 - 185, `${i + 1}. ${lvl.name}`, { size: 32, color: '#e6f6ff' }));
     c.add(txt(this, W / 2, H / 2 - 130, lvl.subtitle, { size: 18, wrap: 520, strokeThickness: 3 }));
-    c.add(txt(this, W / 2, H / 2 - 78, `${lvl.waves.length} waves  ·  ${lvl.startEnergy} starting energy  ·  ${lvl.paths.length > 1 ? 'Two roads' : 'One road'}`, { size: 16, color: '#dddddd', strokeThickness: 3 }));
+    c.add(txt(this, W / 2, H / 2 - 78, `${lvl.waves.length} nights  ·  ${lvl.startEnergy} moonlight  ·  ${lvl.paths.length > 1 ? 'Two roads' : 'One road'}`, { size: 16, color: '#dddddd', strokeThickness: 3 }));
 
     // enemy roster
     const keys = [...new Set(lvl.waves.flat().map(g => g[0]))];
-    c.add(txt(this, W / 2, H / 2 - 40, 'Enemies', { size: 18, color: '#ffe26a', strokeThickness: 3 }));
+    c.add(txt(this, W / 2, H / 2 - 40, 'The Blight', { size: 18, color: '#ffd0f4', strokeThickness: 3 }));
     const sp = Math.min(80, 520 / keys.length);
     keys.forEach((k, j) => {
       const ex = W / 2 + (j - (keys.length - 1) / 2) * sp;

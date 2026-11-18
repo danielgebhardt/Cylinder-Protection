@@ -18,7 +18,10 @@ function computeRes(): number {
 }
 export const RES = computeRes();
 
-export const FONT = '"Trebuchet MS", "Segoe UI", Arial, sans-serif';
+/** Storybook display face for titles, labels and numbers (bundled, works offline). */
+export const FONT = 'Cinzel, Georgia, "Times New Roman", serif';
+/** Plain face for longer descriptive text. */
+export const FONT_BODY = '"Trebuchet MS", "Segoe UI", system-ui, sans-serif';
 
 export const DEPTH = {
   ground: 0,
@@ -35,9 +38,8 @@ export const DEPTH = {
 
 /** Screen regions the HUD occupies; build spots and decor avoid these. */
 export const HUD_ZONES = [
-  { x: 0, y: 0, w: 440, h: 78 },      // stats panel
-  { x: 1050, y: 0, w: 230, h: 78 },   // speed / pause
-  { x: 0, y: 610, w: 210, h: 110 },   // abilities
+  { x: 390, y: 0, w: 500, h: 100 },   // moon-phase wave track
+  { x: 390, y: 625, w: 500, h: 95 },  // crescent dock
 ];
 
 /** Point a scene's main camera at the 1280x720 world, zoomed to the render scale. */

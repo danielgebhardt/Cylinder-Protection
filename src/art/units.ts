@@ -227,6 +227,7 @@ function mat(c: Ctx, base: number, x: number, y: number, w: number, h: number): 
 /* ------------------------------------------------------------------ */
 
 function wolf(c: Ctx, frame: number): void {
+  // Shade Hound: a wolf of living shadow
   const Hh = 44;
   const atk = frame >= 4;
   const step = atk ? 0 : WALK_STEP[frame];
@@ -235,7 +236,7 @@ function wolf(c: Ctx, frame: number): void {
   softShadow(c, 30, Hh - 3, 19, 4, 0.4);
   c.save();
   c.translate(2 + lunge, bob + 2);
-  const fur = 0x6e6e7c;
+  const fur = 0x3a3452;
   const furM = lg(c, 0, 14, 0, 34, [[0, sh(fur, 0.35)], [0.5, hex(fur)], [1, sh(fur, -0.35)]]);
   // tail
   shape(c, c => { c.moveTo(12, 22); c.quadraticCurveTo(2, 18 - step * 2, 1, 10); c.quadraticCurveTo(7, 15, 14, 19); c.closePath(); }, furM, OUT, 1.6);
@@ -260,84 +261,100 @@ function wolf(c: Ctx, frame: number): void {
   shape(c, c => { c.moveTo(hx + 3, hy + 4); c.lineTo(hx + 11, hy + 4 + open); c.lineTo(hx + 3, hy + 7 + open * 0.4); c.closePath(); }, sh(fur, -0.15), OUT, 1.3);
   if (open) { poly(c, [hx + 6, hy + 4, hx + 7, hy + 6.5, hx + 8, hy + 4], '#ffffff', null); }
   circ(c, hx + 13, hy + 1.5, 1.6, '#111', null);
-  ell(c, hx + 2, hy - 2, 2, 1.6, '#ffdc4a', OUT, 0.8);
-  circ(c, hx + 2.6, hy - 2, 0.8, '#111', null);
+  c.fillStyle = rg(c, hx + 2, hy - 2, 7, [[0, 'rgba(192,140,255,0.8)'], [1, 'rgba(192,140,255,0)']]); c.beginPath(); c.arc(hx + 2, hy - 2, 7, 0, Math.PI * 2); c.fill();
+  ell(c, hx + 2, hy - 2, 2, 1.6, '#e6d0ff', OUT, 0.8);
   c.restore();
 }
 function shade2(c: number): number { return c; }
 
-function bat(c: Ctx, frame: number): void {
-  const wing = [-1, 0, 1, 0][frame % 4];
-  c.save();
-  c.translate(0, 8);
-  const body = 0x5a2f80;
-  const wingFill = lg(c, 0, 0, 0, 30, [[0, '#7a4aa8'], [1, '#3a1a5a']]);
-  const tipY = 4 + wing * 11;
-  const span = 27 - Math.abs(wing) * 2;
-  for (const s of [-1, 1]) {
-    shape(c, c => {
-      c.moveTo(30, 18);
-      c.quadraticCurveTo(30 + s * span * 0.5, tipY - 4, 30 + s * span, tipY);
-      c.quadraticCurveTo(30 + s * span * 0.8, tipY + 8, 30 + s * span * 0.62, tipY + 10);
-      c.quadraticCurveTo(30 + s * span * 0.5, tipY + 6, 30 + s * span * 0.35, tipY + 12);
-      c.quadraticCurveTo(30 + s * span * 0.2, 20, 30, 24);
-      c.closePath();
-    }, wingFill, OUT, 1.6);
-  }
-  ell(c, 30, 21, 8, 9, rg(c, 30, 20, 10, [[0, sh(body, 0.35)], [1, sh(body, -0.3)]], 28, 17), OUT, 1.8);
-  poly(c, [25, 14, 26, 5, 29, 13], hex(body), OUT, 1.2);
-  poly(c, [31, 13, 34, 5, 35, 14], hex(body), OUT, 1.2);
-  ell(c, 27.5, 19, 2, 2.2, '#ff5a5a', null); ell(c, 33, 19, 2, 2.2, '#ff5a5a', null);
-  circ(c, 27.8, 19, 0.8, '#300', null); circ(c, 33.3, 19, 0.8, '#300', null);
-  poly(c, [28, 24, 29, 27, 30, 24], '#fff', null); poly(c, [31, 24, 32, 27, 33, 24], '#fff', null);
-  c.restore();
-}
 
-function wraith(c: Ctx, frame: number): void {
-  const atk = frame >= 4;
-  const ph = (frame % 4) / 4 * Math.PI * 2;
-  c.save();
-  c.translate(4, 1);
-  c.fillStyle = rg(c, 23, 30, 26, [[0, 'rgba(160,240,255,0.35)'], [1, 'rgba(160,240,255,0)']]);
-  c.fillRect(0, 0, 46, 56);
-  const robe = lg(c, 0, 6, 0, 54, [[0, 'rgba(70,90,120,0.95)'], [1, 'rgba(30,40,60,0.4)']]);
-  shape(c, c => {
-    c.moveTo(12, 20);
-    c.quadraticCurveTo(14, 6, 23, 5);
-    c.quadraticCurveTo(33, 6, 34, 20);
-    c.lineTo(38 + Math.sin(ph) * 2, 46);
-    for (let i = 0; i < 5; i++) {
-      const x = 38 - i * 7 + Math.sin(ph + i) * 1.5;
-      c.lineTo(x - 3.5, 52 + Math.sin(ph + i * 1.7) * 2.5);
-      c.lineTo(x - 7, 46 + Math.cos(ph + i) * 1.5);
-    }
-    c.closePath();
-  }, robe, 'rgba(20,30,45,0.9)', 1.6);
-  ell(c, 24, 18, 7, 8, '#0d131c', null);
-  ell(c, 21.5, 17.5, 1.8, 2.3, '#9ff7ff', null); ell(c, 27, 17.5, 1.8, 2.3, '#9ff7ff', null);
-  c.fillStyle = rg(c, 24, 17.5, 8, [[0, 'rgba(160,250,255,0.5)'], [1, 'rgba(160,250,255,0)']]);
-  c.beginPath(); c.arc(24, 17.5, 8, 0, Math.PI * 2); c.fill();
-  // arms / claws
-  const ax = atk ? (frame === 5 ? 40 : 30) : 33, ay = atk ? (frame === 5 ? 26 : 16) : 30;
-  limb(c, 30, 24, ax, ay, 3, 'rgba(70,90,120,0.95)', 'rgba(20,30,45,0.9)');
-  for (const d of [-2, 0, 2]) limb(c, ax, ay, ax + 4, ay + d - 1, 0.8, '#cfefff', 'rgba(20,30,45,0.6)');
-  c.restore();
-}
 
 /* ------------------------------------------------------------------ */
 
 /** Canvas size per enemy; `body` is the visible height used for hit points / health bars. */
+
+/** Thornling: a small walking knot of black thorns with ember eyes. */
+function thornling(c: Ctx, frame: number): void {
+  const atk = frame >= 4;
+  const step = atk ? 0 : WALK_STEP[frame];
+  const bob = atk ? 0 : WALK_BOB[frame];
+  const ext = frame === 5 ? 1.35 : frame === 4 ? 0.85 : 1;
+  const cx = 29, cy = 30 + bob;
+  softShadow(c, cx, 49, 13, 3.5, 0.45);
+  limb(c, cx - 4, cy + 8, cx - 4 - step * 4, 49, 2.6, '#3a2230');
+  limb(c, cx + 4, cy + 8, cx + 4 + step * 4, 49, 2.6, '#4a2c3a');
+  const pts: number[] = [];
+  for (let i = 0; i < 18; i++) {
+    const a = (i / 18) * Math.PI * 2;
+    const r = (i % 2 ? 7 : 14 + (i % 4 === 0 ? 3 : 0)) * (i % 2 ? 1 : ext);
+    pts.push(cx + Math.cos(a) * r, cy + Math.sin(a) * r * 0.9);
+  }
+  poly(c, pts, rg(c, cx, cy, 15, [[0, '#6a3a52'], [0.6, '#3a2230'], [1, '#1a0e16']], cx - 3, cy - 4), '#120810', 1.6);
+  c.fillStyle = rg(c, cx + 3, cy - 2, 8, [[0, 'rgba(255,90,60,0.7)'], [1, 'rgba(255,90,60,0)']]);
+  c.beginPath(); c.arc(cx + 3, cy - 2, 8, 0, Math.PI * 2); c.fill();
+  circ(c, cx + 0.5, cy - 2, 2, '#ffb080', null); circ(c, cx + 6, cy - 2, 2, '#ffb080', null);
+}
+
+/** Shadow Moth: dusky wings with glowing eye-spots. */
+function moth(c: Ctx, frame: number): void {
+  const flap = [-1, 0, 1, 0][frame % 4];
+  c.save();
+  c.translate(30, 26);
+  const span = 1 - Math.abs(flap) * 0.22;
+  const lift = flap * 6;
+  for (const sdir of [-1, 1]) {
+    c.save(); c.scale(sdir * span, 1);
+    shape(c, cc => { cc.moveTo(2, -2); cc.bezierCurveTo(10, -18 + lift, 28, -20 + lift, 26, -4 + lift * 0.5); cc.bezierCurveTo(22, 2, 10, 2, 2, 0); },
+      lg(c, 0, -18, 26, 0, [[0, '#4a3a6e'], [1, '#1e1830']]), '#0e0a18', 1.4);
+    shape(c, cc => { cc.moveTo(2, 1); cc.bezierCurveTo(10, 4, 18, 12 + lift * 0.4, 12, 16 + lift * 0.4); cc.bezierCurveTo(6, 14, 3, 8, 2, 1); },
+      lg(c, 0, 0, 0, 16, [[0, '#3a2e58'], [1, '#18122a']]), '#0e0a18', 1.3);
+    c.fillStyle = rg(c, 17, -9 + lift * 0.7, 7, [[0, 'rgba(192,140,255,0.9)'], [1, 'rgba(192,140,255,0)']]);
+    c.beginPath(); c.arc(17, -9 + lift * 0.7, 7, 0, Math.PI * 2); c.fill();
+    circ(c, 17, -9 + lift * 0.7, 2.6, '#e6d0ff', '#0e0a18', 0.8);
+    c.restore();
+  }
+  ell(c, 0, 2, 3.5, 11, lg(c, 0, -9, 0, 13, [[0, '#2a2240'], [1, '#100c1a']]), '#0e0a18', 1.2);
+  c.strokeStyle = '#2a2240'; c.lineWidth = 1.2;
+  c.beginPath(); c.moveTo(-1, -8); c.quadraticCurveTo(-5, -16, -8, -17); c.moveTo(1, -8); c.quadraticCurveTo(5, -16, 8, -17); c.stroke();
+  circ(c, -1.5, -7, 1, '#ff6ad8', null); circ(c, 1.5, -7, 1, '#ff6ad8', null);
+  c.restore();
+}
+
+/** Blight Wisp: a ghostly green-violet flame. */
+function wisp(c: Ctx, frame: number): void {
+  const atk = frame >= 4;
+  const ph = (frame % 4) / 4 * Math.PI * 2;
+  const k = frame === 5 ? 1.25 : 1;
+  c.save();
+  c.translate(27, 34);
+  c.fillStyle = rg(c, 0, 0, 26 * k, [[0, 'rgba(160,255,140,0.35)'], [0.6, 'rgba(160,110,255,0.18)'], [1, 'rgba(160,110,255,0)']]);
+  c.beginPath(); c.arc(0, 0, 26 * k, 0, Math.PI * 2); c.fill();
+  shape(c, cc => {
+    cc.moveTo(-12 * k, 10);
+    cc.bezierCurveTo(-16 * k, -4, -6, -10, -4 + Math.sin(ph) * 3, -26 * k);
+    cc.bezierCurveTo(2, -16, 8, -22 + Math.cos(ph) * 3, 6 + Math.sin(ph) * 2, -30 * k);
+    cc.bezierCurveTo(16 * k, -16, 16 * k, 0, 12 * k, 10);
+    cc.quadraticCurveTo(6, 18 + Math.sin(ph + 1) * 3, 2, 12); cc.quadraticCurveTo(-4, 20 + Math.cos(ph) * 3, -6, 12); cc.quadraticCurveTo(-10, 16, -12 * k, 10);
+  }, lg(c, 0, -30, 0, 16, [[0, 'rgba(220,255,200,0.95)'], [0.4, 'rgba(150,240,120,0.85)'], [1, 'rgba(130,90,230,0.55)']]), 'rgba(40,20,60,0.8)', 1.4);
+  ell(c, -4, -6, 2.6, 3.4, '#1a0e2a', null); ell(c, 5, -6, 2.6, 3.4, '#1a0e2a', null);
+  if (atk) { ell(c, 0.5, 3, 4, 2.4, '#1a0e2a', null); }
+  c.restore();
+}
+
 export const ENEMY_TEX: Record<string, { w: number; h: number; body: number }> = {
   goblin: { w: 58, h: 52, body: 34 }, wolf: { w: 60, h: 44, body: 30 }, orc: { w: 70, h: 66, body: 46 }, bat: { w: 60, h: 46, body: 24 },
   shaman: { w: 62, h: 66, body: 46 }, brute: { w: 96, h: 90, body: 64 }, wraith: { w: 54, h: 58, body: 50 }, warlord: { w: 140, h: 132, body: 98 },
 };
 
 const ENEMY_LOOKS: Record<string, Omit<Humanoid, 'w' | 'h'>> = {
-  goblin: { s: 1, skin: 0x6cbf3c, body: 0x8a5a32, bodyType: 'tunic', legs: 0x5a3a22, head: 'goblin', helm: 'none', weapon: 'dagger', eyes: 0xfff38a },
-  orc: { s: 1.3, skin: 0x4e8a32, body: 0x7a7a84, bodyType: 'armor', legs: 0x4a3424, head: 'orc', helm: 'helmet', helmColor: 0x7a7a80, weapon: 'axe', eyes: 0xffe04a, bulk: 1.1 },
-  shaman: { s: 1.2, skin: 0x7fae4c, body: 0x6b5a3a, bodyType: 'robe', legs: 0x4a3424, head: 'mask', helm: 'hood', helmColor: 0x8a3a2a, weapon: 'staff' },
-  brute: { s: 1.7, skin: 0x6a8a9c, body: 0x8a96a0, bodyType: 'armor', legs: 0x3e4e5a, head: 'troll', helm: 'visor', helmColor: 0x9aa6ad, weapon: 'hammer', bulk: 1.3 },
-  warlord: { s: 2.45, skin: 0x3e7a2a, body: 0x2e2e36, bodyType: 'armor', legs: 0x2a2018, head: 'warlord', helm: 'crown', helmColor: 0x2a2a30, weapon: 'bigaxe', cape: 0x9a1f1f, metal: 0xb0b4bc, eyes: 0xff3a2a, bulk: 1.25 },
+  // Bramble Knight
+  orc: { s: 1.3, skin: 0x5a6a3a, body: 0x6a4a30, bodyType: 'armor', legs: 0x3a2a1e, head: 'orc', helm: 'horned', helmColor: 0x4a3426, weapon: 'axe', metal: 0x9aa0a8, eyes: 0xffb030, bulk: 1.1 },
+  // Blight Witch
+  shaman: { s: 1.2, skin: 0x8a9a7a, body: 0x3e2a52, bodyType: 'robe', legs: 0x2a1e30, head: 'mask', helm: 'hood', helmColor: 0x5a2a6a, weapon: 'staff' },
+  // Mossback Troll
+  brute: { s: 1.7, skin: 0x5a7050, body: 0x6a5a48, bodyType: 'armor', legs: 0x3a3a2e, head: 'troll', helm: 'visor', helmColor: 0x7a7a72, weapon: 'hammer', bulk: 1.3 },
+  // The Hollow King
+  warlord: { s: 2.45, skin: 0x2a2236, body: 0x1e1828, bodyType: 'armor', legs: 0x14101c, head: 'warlord', helm: 'crown', helmColor: 0x2a2236, weapon: 'bigaxe', cape: 0x4a1a5a, metal: 0xa898c0, eyes: 0x7af0e0, bulk: 1.25 },
 };
 
 
@@ -347,8 +364,9 @@ export function generateUnits(scene: Phaser.Scene): void {
     for (let f = 0; f < FRAMES; f++) {
       tex(scene, `enemy_${key}_${f}`, t.w, t.h, c => {
         if (key === 'wolf') wolf(c, f);
-        else if (key === 'bat') bat(c, f);
-        else if (key === 'wraith') wraith(c, f);
+        else if (key === 'bat') moth(c, f);
+        else if (key === 'wraith') wisp(c, f);
+        else if (key === 'goblin') thornling(c, f);
         else humanoid(c, { ...ENEMY_LOOKS[key], w: t.w, h: t.h }, f);
       });
     }

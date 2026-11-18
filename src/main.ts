@@ -1,4 +1,6 @@
 import * as Phaser from 'phaser';
+import '@fontsource/cinzel/600.css';
+import '@fontsource/cinzel/700.css';
 import { App } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import { W, H, RES } from './config';
@@ -11,7 +13,7 @@ const game = new Phaser.Game({
   parent: 'game',
   width: Math.round(W * RES),
   height: Math.round(H * RES),
-  backgroundColor: '#1b2a1a',
+  backgroundColor: '#0c1428',
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
