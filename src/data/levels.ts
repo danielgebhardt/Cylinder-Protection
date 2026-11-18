@@ -13,7 +13,7 @@ export interface Theme {
 export interface LevelDef {
   name: string;
   subtitle: string;
-  startGold: number;
+  startEnergy: number;
   lives: number;
   hpMult: number;
   pace?: number;  // multiplies spawn gaps (higher = enemies more spread out)
@@ -55,8 +55,8 @@ const EMBER: Theme = {
 export const LEVELS: LevelDef[] = [
   {
     name: 'Greenmeadow Road',
-    subtitle: 'The goblins have found the old road. Hold them back!',
-    startGold: 300, lives: 20, hpMult: 1, maxSpots: 12, seed: 11, theme: MEADOW, mapPos: [210, 470],
+    subtitle: 'The goblins have found the old road. Build crystals in the Cylinder\'s glow and hold them back!',
+    startEnergy: 300, lives: 20, hpMult: 1, maxSpots: 12, seed: 11, theme: MEADOW, mapPos: [210, 470],
     paths: [[[-40, 190], [190, 185], [320, 250], [350, 410], [470, 520], [680, 525], [790, 410], [780, 270], [890, 175], [1050, 200], [1110, 350], [1175, 455]]],
     waves: [
       [['goblin', 6, 1.4]],
@@ -69,8 +69,8 @@ export const LEVELS: LevelDef[] = [
   },
   {
     name: 'Bramblewood',
-    subtitle: 'Bats circle above the autumn forest. Your soldiers cannot reach them.',
-    startGold: 380, lives: 20, hpMult: 1, maxSpots: 13, seed: 23, theme: AUTUMN, mapPos: [430, 330],
+    subtitle: 'Bats circle above the autumn forest, slicing through any conduit in their path.',
+    startEnergy: 400, lives: 20, hpMult: 1.15, maxSpots: 13, seed: 23, theme: AUTUMN, mapPos: [430, 330],
     paths: [[[-40, 560], [170, 560], [290, 460], [260, 300], [350, 170], [550, 150], [660, 270], [620, 440], [730, 575], [930, 580], [1040, 455], [985, 305], [1060, 185], [1170, 230]]],
     waves: [
       [['goblin', 10, 0.9]],
@@ -86,7 +86,7 @@ export const LEVELS: LevelDef[] = [
   {
     name: 'Twin Fens',
     subtitle: 'Two roads, one Cylinder. Shamans heal their kin in the fog.',
-    startGold: 600, lives: 20, hpMult: 1.0, pace: 1.2, maxSpots: 15, seed: 37, theme: SWAMP, mapPos: [660, 470],
+    startEnergy: 600, lives: 20, hpMult: 1.45, pace: 1.2, maxSpots: 15, seed: 37, theme: SWAMP, mapPos: [660, 470],
     paths: [
       [[-40, 150], [200, 160], [380, 260], [540, 360], [700, 370], [850, 270], [1000, 290], [1090, 410], [1180, 430]],
       [[-40, 600], [200, 590], [390, 470], [540, 360], [700, 370], [850, 270], [1000, 290], [1090, 410], [1180, 430]],
@@ -106,8 +106,8 @@ export const LEVELS: LevelDef[] = [
   },
   {
     name: 'Frostfang Pass',
-    subtitle: 'Wraiths drift through the snow — steel passes right through them.',
-    startGold: 650, lives: 20, hpMult: 1.0, pace: 1.3, maxSpots: 15, seed: 41, theme: SNOW, mapPos: [870, 300],
+    subtitle: 'Wraiths drift through the snow. Boulders pass right through them, and they cut through your conduits.',
+    startEnergy: 650, lives: 20, hpMult: 1.6, pace: 1.3, maxSpots: 15, seed: 41, theme: SNOW, mapPos: [870, 300],
     paths: [[[640, -40], [640, 120], [430, 150], [235, 220], [200, 380], [380, 450], [620, 390], [860, 300], [1080, 360], [1090, 530], [870, 610], [640, 600]]],
     waves: [
       [['wolf', 10, 0.8]],
@@ -127,7 +127,7 @@ export const LEVELS: LevelDef[] = [
   {
     name: "The Warlord's Gate",
     subtitle: 'Grukk the Warlord marches on the Cylinder himself. This is the final stand!',
-    startGold: 900, lives: 20, hpMult: 1.05, pace: 1.35, maxSpots: 17, seed: 59, theme: EMBER, mapPos: [1070, 460],
+    startEnergy: 800, lives: 20, hpMult: 1.6, pace: 1.35, maxSpots: 17, seed: 59, theme: EMBER, mapPos: [1070, 460],
     paths: [
       [[1320, 200], [1110, 200], [960, 300], [800, 245], [640, 180], [480, 255], [360, 380], [220, 400], [110, 400]],
       [[1320, 565], [1110, 565], [945, 480], [800, 525], [640, 585], [480, 505], [360, 380], [220, 400], [110, 400]],

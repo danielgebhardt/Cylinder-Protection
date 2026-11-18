@@ -2,7 +2,23 @@ import * as Phaser from 'phaser';
 import { DEPTH } from '../config';
 import type { Enemy } from './Enemy';
 
-export type ProjKind = 'arrow' | 'bolt' | 'shell' | 'rocket' | 'bomblet' | 'meteor';
+export type ProjKind = 'fireball' | 'ice' | 'boulder' | 'plasma' | 'glob';
+
+interface KindStyle {
+  tex: string;
+  tint?: number;
+  glow?: boolean;          // additive blending
+  rotate?: 'face' | 'spin' | 'none';
+  trail?: { tex: string; tint: number; add: boolean; every: number; scale: number; life: number };
+}
+
+const STYLE: Record<ProjKind, KindStyle> = {
+  fireball: { tex: 'bolt', tint: 0xff8a2a, glow: true, rotate: 'none', trail: { tex: 'glow', tint: 0xff6a1a, add: true, every: 0.025, scale: 0.4, life: 300 } },
+  ice: { tex: 'iceshard', rotate: 'face', trail: { tex: 'spark', tint: 0xbff4ff, add: true, every: 0.04, scale: 0.7, life: 250 } },
+  boulder: { tex: 'boulder', rotate: 'spin', trail: { tex: 'smoke', tint: 0xb8a080, add: false, every: 0.06, scale: 0.25, life: 350 } },
+  plasma: { tex: 'bolt', tint: 0xffc0f8, glow: true, rotate: 'none', trail: { tex: 'glow', tint: 0xff70e0, add: true, every: 0.02, scale: 0.22, life: 200 } },
+  glob: { tex: 'magmaglob', rotate: 'spin', trail: { tex: 'glow', tint: 0xff5a1a, add: true, every: 0.03, scale: 0.35, life: 320 } },
+};
 
 export interface ProjOpts {
   kind: ProjKind;
@@ -11,7 +27,6 @@ export interface ProjOpts {
   tx?: number; ty?: number;  // fixed landing point (if no target)
   speed: number;             // px/s used to derive flight time
   arc: number;               // arc height in px
-  tint?: number;
   scale?: number;
   onArrive: (x: number, y: number, target: Enemy | null) => void;
 }
@@ -25,20 +40,18 @@ export class Projectile {
   private dur: number;
   private prevX: number; private prevY: number;
   private trailT = 0;
+  private style: KindStyle;
   done = false;
 
   constructor(private scene: Phaser.Scene, private o: ProjOpts) {
+    this.style = STYLE[o.kind];
     this.sx = o.x; this.sy = o.y;
     this.tx = o.target ? o.target.x : o.tx ?? o.x;
     this.ty = o.target ? o.target.y - o.target.hitHeight : o.ty ?? o.y;
-    const d = Math.hypot(this.tx - this.sx, this.ty - this.sy);
-    this.dur = Math.max(0.12, d / o.speed);
-    const tex = o.kind === 'arrow' ? 'arrow' : o.kind === 'bolt' ? 'bolt' : o.kind === 'rocket' ? 'rocketp' : o.kind === 'meteor' ? 'meteor' : 'shell';
-    this.sprite = scene.add.image(o.x, o.y, tex).setDepth(DEPTH.projectile);
-    if (o.tint !== undefined) this.sprite.setTint(o.tint);
-    if (o.kind === 'bolt' || o.kind === 'meteor') this.sprite.setBlendMode(Phaser.BlendModes.ADD);
-    if (o.scale) this.sprite.setScale(o.scale);
-    if (o.kind === 'bomblet') this.sprite.setScale(0.6);
+    this.dur = Math.max(0.12, Math.hypot(this.tx - this.sx, this.ty - this.sy) / o.speed);
+    this.sprite = scene.add.image(o.x, o.y, this.style.tex).setDepth(DEPTH.projectile).setScale(o.scale ?? 1);
+    if (this.style.tint !== undefined) this.sprite.setTint(this.style.tint);
+    if (this.style.glow) this.sprite.setBlendMode(Phaser.BlendModes.ADD);
     this.prevX = o.x; this.prevY = o.y;
   }
 
@@ -51,25 +64,18 @@ export class Projectile {
     const x = this.sx + (this.tx - this.sx) * p;
     const y = this.sy + (this.ty - this.sy) * p - Math.sin(p * Math.PI) * this.o.arc;
     this.sprite.setPosition(x, y);
-    if (this.o.kind !== 'bolt' && this.o.kind !== 'shell' && this.o.kind !== 'bomblet') {
-      this.sprite.rotation = Math.atan2(y - this.prevY, x - this.prevX);
-    } else if (this.o.kind === 'shell' || this.o.kind === 'bomblet') {
-      this.sprite.rotation += dt * 8;
-    }
+    if (this.style.rotate === 'face') this.sprite.rotation = Math.atan2(y - this.prevY, x - this.prevX);
+    else if (this.style.rotate === 'spin') this.sprite.rotation += dt * 7;
     this.prevX = x; this.prevY = y;
 
-    this.trailT -= dt;
-    const k = this.o.kind;
-    if (this.trailT <= 0 && (k === 'bolt' || k === 'rocket' || k === 'meteor')) {
-      this.trailT = k === 'meteor' ? 0.02 : 0.03;
-      if (k === 'bolt' || k === 'meteor') {
-        const g = this.scene.add.image(x, y, 'glow').setBlendMode(Phaser.BlendModes.ADD).setTint(k === 'bolt' ? (this.o.tint ?? 0xffffff) : 0xff8a2a)
-          .setAlpha(0.7).setScale(k === 'meteor' ? 0.7 : 0.28).setDepth(DEPTH.projectile - 1);
-        this.scene.tweens.add({ targets: g, alpha: 0, scale: g.scale * 0.3, duration: k === 'meteor' ? 380 : 260, onComplete: () => g.destroy() });
-      }
-      if (k === 'rocket' || k === 'meteor') {
-        const sm = this.scene.add.image(x, y, 'smoke').setTint(k === 'meteor' ? 0x5a4a40 : 0xcfcac2).setAlpha(0.55).setScale(k === 'meteor' ? 0.5 : 0.22).setDepth(DEPTH.projectile - 2);
-        this.scene.tweens.add({ targets: sm, alpha: 0, scale: sm.scale * 2.2, y: y - 8, duration: k === 'meteor' ? 700 : 500, onComplete: () => sm.destroy() });
+    const tr = this.style.trail;
+    if (tr) {
+      this.trailT -= dt;
+      if (this.trailT <= 0) {
+        this.trailT = tr.every;
+        const g = this.scene.add.image(x, y, tr.tex).setTint(tr.tint).setAlpha(0.7).setScale(tr.scale * (this.o.scale ?? 1)).setDepth(DEPTH.projectile - 1);
+        if (tr.add) g.setBlendMode(Phaser.BlendModes.ADD);
+        this.scene.tweens.add({ targets: g, alpha: 0, scale: g.scale * (tr.add ? 0.3 : 2), duration: tr.life, onComplete: () => g.destroy() });
       }
     }
 

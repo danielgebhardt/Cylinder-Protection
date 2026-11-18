@@ -141,7 +141,7 @@ export class MenuScene extends Phaser.Scene {
     c.add(block);
     c.add(txt(this, W / 2, H / 2 - 185, `${i + 1}. ${lvl.name}`, { size: 34, color: '#ffe26a' }));
     c.add(txt(this, W / 2, H / 2 - 130, lvl.subtitle, { size: 18, wrap: 520, strokeThickness: 3 }));
-    c.add(txt(this, W / 2, H / 2 - 78, `${lvl.waves.length} waves  ·  ${lvl.startGold} starting gold  ·  ${lvl.paths.length > 1 ? 'Two roads' : 'One road'}`, { size: 16, color: '#dddddd', strokeThickness: 3 }));
+    c.add(txt(this, W / 2, H / 2 - 78, `${lvl.waves.length} waves  ·  ${lvl.startEnergy} starting energy  ·  ${lvl.paths.length > 1 ? 'Two roads' : 'One road'}`, { size: 16, color: '#dddddd', strokeThickness: 3 }));
 
     // enemy roster
     const keys = [...new Set(lvl.waves.flat().map(g => g[0]))];

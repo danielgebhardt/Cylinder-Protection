@@ -8,36 +8,51 @@ All art and sound are generated in code — there are no image or audio asset fi
 with Canvas2D (gradients, outlines, highlights) at the device's real pixel density, so they stay sharp on
 high-resolution phone screens, and every unit has walk and attack animations.
 
-## Features
+## How it plays
 
-- **5 levels** with different themes (meadow, autumn forest, swamp, snow pass, volcanic gate), one- and two-road maps,
-  and a final boss: **Grukk the Warlord**, who summons goblins as he marches.
-- **4 tower lines**, each with 3 tiers and then a **choice of 2 specializations**, and each specialization has a
-  **signature skill with 3 ranks**:
+**The energy network.** The Cylinder projects an energy field, and you can build anywhere inside it
+except on the road. **Conduit Pylons** relay power outward and extend the field. Every structure is
+linked back to the Cylinder by a glowing conduit, and each source can power a limited number of crystals
+(the Cylinder 5, each Pylon 3; the pips above a source show its load). **Bats, wraiths and the Warlord
+sever conduits they pass through**, and crystals that lose power go dark until the link recovers or
+reroutes through another source. Kills give **energy**, the only currency.
 
-  | Line | Tiers 1–3 | Specialization A | Specialization B |
-  |---|---|---|---|
-  | Archer (physical, hits flyers) | Post → Tower → Fort | **Ranger's Lodge** — rapid fire, *Venom Arrows* | **Marksman Spire** — huge range, *Headshot* |
-  | Mage (magic, ignores armor) | Mage → Adept → Wizard | **Arcane Spire** — raw power, *Chain Lightning* | **Frost Sanctum** — slows, *Deep Freeze* |
-  | Bombard (explosive splash, ground only) | Bombard → Heavy → Siege Works | **Doom Mortar** — giant blasts, *Cluster Bomb* | **Rocket Battery** — 2 homing rockets, hits flyers, *Napalm* |
-  | Barracks (soldiers block the road) | Militia → Footmen → Guards | **Knight Hall** — tanky, *Shield Bash* | **Berserker Den** — huge damage, *Cleave* |
+**Elemental crystals and fusion.** Four crystals:
 
-- **8 enemy types** that reward mixing towers: armored trolls, magic-resistant healing shamans, physical-immune wraiths,
-  bats that fly over soldiers, fast wolves, and more. New enemies get an intro card the first time you meet them.
-- **Hero abilities**: *Rain of Fire* (meteor strike) and *Reinforcements* (summon two knights anywhere on the road).
-- Move barracks soldiers with a **rally flag**, **call waves early** for bonus gold, 1×/2× speed, pause menu.
-- **3-star rating** per level, progress saved on the device, first-level tutorial hints.
-- Android: landscape-locked, immersive fullscreen, hardware back button pauses / navigates, auto-pause when backgrounded.
+| Crystal | Attack |
+|---|---|
+| Fire | arcing fireballs, splash + burn |
+| Frost | ice shards that slow |
+| Storm | rapid lightning that chains, great vs flyers |
+| Earth | heavy boulders, splash, ground only |
 
-## How to play
+Tap a crystal next to another to **fuse** them into one stronger tower. Fusing also frees a power slot.
 
-1. Tap an empty **build plot** → tap a tower once to see its stats, tap again (✔) to build.
-2. Tap the **skull** at the road entrance to start the first wave. Later waves start on a timer — tap the skull early for bonus gold.
-3. Tap a tower to **upgrade**, **specialize**, buy **skills**, **sell**, or (barracks) move the **rally flag**.
-4. Tap the meteor / swords buttons (bottom-left), then tap the map to use abilities.
-5. Tap an enemy to see its armor, magic resistance and a tip on how to beat it.
+| | Fire | Frost | Storm | Earth |
+|---|---|---|---|---|
+| **Fire** | Inferno | Steam Vent | Plasma Spire | Magma Forge |
+| **Frost** | | Permafrost | Blizzard Eye | Glacier Spire |
+| **Storm** | | | Tempest | Tremor Core |
+| **Earth** | | | | Monolith |
 
-Don't let enemies reach the Cylinder — lose 2 or fewer lives for 3 stars.
+Any crystal (fused or not) can be **attuned** three times for more damage and range.
+
+**Cylinder powers.** *Surge* makes powered crystals fire twice as fast for a few seconds; *Nova* blasts
+enemies near the Cylinder and knocks them back.
+
+**Also:** 5 levels (meadow, autumn forest, swamp, snow pass, volcanic gate) with one- and two-road
+maps and a boss, 8 enemy types, call waves early through the rift for bonus energy, 1×/2× speed,
+3-star ratings, saved progress and a first-level tutorial. On Android it's landscape-locked and
+fullscreen, the back button pauses, and it auto-pauses in the background.
+
+## Controls
+
+1. Tap glowing ground to open the build ring: four crystals and a Pylon. Tap once for details, again to build.
+2. Tap the **rift** at a road entrance to start the first wave.
+3. Tap a crystal to attune, fuse with a neighbour, or dismantle it.
+4. Tap an enemy to see its armor, magic resistance and how to beat it.
+
+Don't let enemies reach the Cylinder: lose 2 or fewer lives for 3 stars.
 
 ## Development
 
@@ -50,7 +65,7 @@ npm run build        # typecheck + production bundle in dist/
 Handy URL parameters while developing:
 
 - `?level=2` — jump straight into a level (0-based)
-- `?debug` — start with lots of gold
+- `?debug` — start with lots of energy
 - `?res=2` — force the render scale (normally picked from the screen's pixel density)
 
 ## Android
@@ -86,11 +101,12 @@ src/
     towers.ts units.ts world.ts fx.ts
   data/
     enemies.ts         enemy stats & tips
-    towers.ts          tower tree, specializations and skills
+    towers.ts          crystals, fusion table, attunement, network constants
     levels.ts          maps (road control points), waves, themes, economy
   game/
-    PathLine.ts        smooth roads, build-plot generation
-    Enemy.ts Tower.ts Soldier.ts Projectile.ts Effects.ts
+    Network.ts         energy field, conduits, capacity, severing
+    Tower.ts           crystal towers, pylons, the Cylinder node
+    PathLine.ts Enemy.ts Projectile.ts Effects.ts
   scenes/
     BootScene.ts       generates textures
     MenuScene.ts       world map + level briefings
@@ -100,5 +116,5 @@ src/
 
 ### Tuning
 
-All balance lives in `src/data/`. Each level has `startGold`, `hpMult` (enemy HP scale) and `pace`
+All balance lives in `src/data/`. Each level has `startEnergy`, `hpMult` (enemy HP scale) and `pace`
 (spawn spacing). Waves are lists of `[enemy, count, gap, delay, path]` groups.

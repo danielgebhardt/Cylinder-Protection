@@ -12,6 +12,7 @@ export interface RadialOption {
   priceLabel?: string;      // overrides the price tag (e.g. sell refund)
   pips?: [number, number];  // [rank, max]
   maxed?: boolean;
+  maxedLabel?: string;      // tag shown when maxed (default MAX)
   confirm: boolean;         // needs a second tap
   onSelect?: () => void;    // first tap (info/preview)
   action: () => void;
@@ -33,9 +34,9 @@ export class RadialMenu {
   readonly container: Phaser.GameObjects.Container;
   private slots: Slot[] = [];
   private selected = -1;
-  private lastGold = -1;
+  private lastFunds = -1;
 
-  constructor(private scene: Phaser.Scene, x: number, y: number, options: RadialOption[], private getGold: () => number) {
+  constructor(private scene: Phaser.Scene, x: number, y: number, options: RadialOption[], private getFunds: () => number) {
     const cx = clamp(x, R + BR + 6, W - R - BR - 6);
     const cy = clamp(y, R + BR + 16, H - R - BR - 14);
     this.container = scene.add.container(cx, cy).setDepth(DEPTH.menu);
@@ -92,7 +93,7 @@ export class RadialMenu {
 
   private affordable(opt: RadialOption): boolean {
     if (opt.maxed) return false;
-    return opt.price === undefined || this.getGold() >= opt.price;
+    return opt.price === undefined || this.getFunds() >= opt.price;
   }
 
   private tap(i: number): void {
@@ -117,9 +118,9 @@ export class RadialMenu {
 
   /** Redraw affordability state (call every frame; only redraws on change). */
   refresh(force = false): void {
-    const gold = this.getGold();
-    if (!force && gold === this.lastGold) return;
-    this.lastGold = gold;
+    const funds = this.getFunds();
+    if (!force && funds === this.lastFunds) return;
+    this.lastFunds = funds;
     this.slots.forEach((slot, i) => {
       const ok = this.affordable(slot.opt);
       const sel = i === this.selected;
@@ -132,7 +133,7 @@ export class RadialMenu {
       slot.check.setVisible(sel && ok);
       slot.icon.setVisible(!(sel && ok));
       if (slot.price && slot.opt.price !== undefined) slot.price.setColor(ok ? '#ffd23a' : '#c05050');
-      if (slot.opt.maxed && slot.price) slot.price.setText('MAX').setColor('#aaaaaa');
+      if (slot.opt.maxed && slot.price) slot.price.setText(slot.opt.maxedLabel ?? 'MAX').setColor('#aaaaaa');
     });
   }
 

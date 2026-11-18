@@ -5,7 +5,6 @@ import { ENEMY_TEX } from '../art/textures';
 import { DEPTH } from '../config';
 import { rand, randInt } from '../util';
 import type { PathLine } from './PathLine';
-import type { Soldier } from './Soldier';
 import type { GameScene } from '../scenes/GameScene';
 
 let nextId = 1;
@@ -21,7 +20,6 @@ export class Enemy {
   x = 0;
   y = 0;
   alive = true;
-  blocker: Soldier | null = null;
   /** Damage already in flight towards this enemy (used to avoid overkill). */
   incoming = 0;
   readonly hitHeight: number;
@@ -32,7 +30,8 @@ export class Enemy {
   frozen = false;
   poisonDps = 0;
   poisonT = 0;
-  private atkT = 0;
+  burnDps = 0;
+  burnT = 0;
   private healT: number;
   private summonT: number;
   private summonPause = 0;
@@ -54,7 +53,9 @@ export class Enemy {
 
   constructor(private world: GameScene, key: string, readonly path: PathLine, startD = 0, hpMult = 1) {
     this.def = ENEMIES[key];
-    this.maxHp = this.hp = Math.round(this.def.hp * hpMult);
+    // bosses scale half as steeply so the finale stays a fight, not a single damage check
+    const mult = this.def.boss ? 1 + (hpMult - 1) * 0.5 : hpMult;
+    this.maxHp = this.hp = Math.round(this.def.hp * mult);
     this.d = startD;
     this.lane = this.def.boss ? 0 : rand(-9, 9);
     this.healT = this.def.heals ? this.def.heals.every * rand(0.4, 1) : 0;
@@ -102,7 +103,7 @@ export class Enemy {
 
   /** Where this enemy will be after `t` seconds if unobstructed. */
   predict(t: number): { x: number; y: number } {
-    if (this.blocker || this.stunT > 0) return { x: this.x, y: this.y };
+    if (this.stunT > 0) return { x: this.x, y: this.y };
     const sp = this.def.speed * this.slowFactor;
     const p = this.path.at(this.d + sp * t);
     const n = this.path.dir(this.d + sp * t);
@@ -144,6 +145,13 @@ export class Enemy {
       this.fxT -= dt;
       if (this.fxT <= 0) { this.fxT = 0.35; this.world.fx.bubble(this.x, this.y - this.hitHeight); }
     }
+    if (this.burnT > 0) {
+      this.burnT -= dt;
+      this.world.damageEnemy(this, this.burnDps * dt, 'true', true);
+      if (!this.alive) return;
+      this.fxT -= dt;
+      if (this.fxT <= 0) { this.fxT = 0.12; this.world.fx.flame(this.x, this.y - this.hitHeight * 0.6); }
+    }
     if (this.flashT > 0) this.flashT -= dt;
     this.refreshTint();
     this.body.anims.timeScale = this.animRate * this.slowFactor;
@@ -178,29 +186,6 @@ export class Enemy {
       }
     }
 
-    // melee with a blocking soldier
-    if (this.blocker) {
-      if (!this.blocker.alive) { this.blocker = null; }
-      else {
-        if (this.mode === 'walk') this.setMode('idle');
-        this.body.setFlipX(this.blocker.x < this.x);
-        this.atkT -= dt;
-        if (this.atkT <= 0 && this.def.dmg[1] > 0) {
-          this.atkT = this.def.atkRate;
-          this.mode = '';
-          this.setMode('attack');
-          this.world.time.delayedCall(140, () => {
-            if (this.alive && this.blocker?.alive) {
-              this.blocker.takeDamage(randInt(this.def.dmg[0], this.def.dmg[1]));
-              this.world.fx.sparks(this.blocker.x, this.blocker.y - 16, 0xffe0a0, 3, 12);
-            }
-          });
-        }
-        this.animateFly();
-        return;
-      }
-    }
-
     if (this.summonPause > 0) { this.summonPause -= dt; return; }
 
     this.d += this.def.speed * this.slowFactor * dt;
@@ -219,9 +204,9 @@ export class Enemy {
     }
   }
 
-  /** 0 normal, 1 flash, 2 frozen, 3 slowed, 4 poisoned */
+  /** 0 normal, 1 flash, 2 frozen, 3 slowed, 4 poisoned, 5 burning */
   private refreshTint(): void {
-    const st = this.flashT > 0 ? 1 : this.stunT > 0 && this.frozen ? 2 : this.slowT > 0 ? 3 : this.poisonT > 0 ? 4 : 0;
+    const st = this.flashT > 0 ? 1 : this.stunT > 0 && this.frozen ? 2 : this.slowT > 0 ? 3 : this.burnT > 0 ? 5 : this.poisonT > 0 ? 4 : 0;
     if (st === this.tintState) return;
     this.tintState = st;
     const b = this.body;
@@ -231,8 +216,15 @@ export class Enemy {
       if (st === 2) b.setTint(0x8fe8ff);
       else if (st === 3) b.setTint(0xb8dcff);
       else if (st === 4) b.setTint(0xa8ff9a);
+      else if (st === 5) b.setTint(0xffb080);
       else b.clearTint();
     }
+  }
+
+  /** Shove the enemy back along the road (Nova). */
+  knockback(px: number): void {
+    this.d = Math.max(0, this.d - (this.def.boss ? px * 0.25 : px));
+    this.updatePos();
   }
 
   applySlow(factor: number, duration: number): void {
@@ -245,6 +237,11 @@ export class Enemy {
     if (this.def.boss) duration *= 0.3;
     this.stunT = Math.max(this.stunT, duration);
     this.frozen = frozen;
+  }
+
+  applyBurn(dps: number, duration: number): void {
+    this.burnDps = Math.max(this.burnT > 0 ? this.burnDps : 0, dps);
+    this.burnT = Math.max(this.burnT, duration);
   }
 
   applyPoison(dps: number, duration: number): void {

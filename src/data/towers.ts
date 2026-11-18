@@ -1,121 +1,137 @@
 import type { DamageType } from './enemies';
 
-export type TowerKind = 'archer' | 'mage' | 'cannon' | 'barracks';
+/**
+ * Elemental crystal towers. Four base elements; fusing two neighbouring crystals
+ * creates one of ten fused towers (6 hybrids + 4 "greater" same-element forms).
+ * Any crystal can be attuned up to 3 ranks for more damage and range.
+ */
 
-export type SkillId = 'poison' | 'headshot' | 'chain' | 'freeze' | 'cluster' | 'napalm' | 'bash' | 'cleave';
+export type Element = 'fire' | 'frost' | 'storm' | 'earth';
 
-export interface SkillDef {
-  id: SkillId;
-  name: string;
-  costs: [number, number, number];
-  describe: (rank: number) => string;
-}
+export type Attack =
+  | 'fireball'   // arcing fireball, splash + burn
+  | 'shard'      // homing ice shard, slows
+  | 'zap'        // instant lightning, can chain
+  | 'boulder'    // arcing boulder, splash (ground only)
+  | 'plasma'     // fast homing bolt, burn
+  | 'magma'      // lava glob, splash + burning pool (ground only)
+  | 'spikes'     // ice spikes erupt under the target, freezing everything in the splash
+  | 'aura';      // continuous pulse around the tower
 
 export interface TowerSpec {
   id: string;
-  kind: TowerKind;
   name: string;
-  tier: 1 | 2 | 3 | 4;
-  cost: number;          // price to build / upgrade into this spec
+  elements: Element[];      // 1 for base crystals, 2 for fused ones
+  fused: boolean;
+  cost: number;             // base build cost (fusions: the fusion fee)
   range: number;
-  rate: number;          // seconds between attacks
+  rate: number;             // seconds between attacks / pulses
   dmg: [number, number];
   dmgType: DamageType;
-  splash?: number;
+  attack: Attack;
   hitsAir: boolean;
-  slow?: { factor: number; duration: number };
-  volley?: number;       // simultaneous targets
-  // barracks only
-  soldiers?: { count: number; hp: number; dmg: [number, number]; armor: number; rate: number; respawn: number; look: string };
-  next: string[];        // upgrade options
-  skill?: SkillDef;
+  splash?: number;
+  burn?: { dps: number; time: number };
+  slow?: { factor: number; time: number };
+  freeze?: { chance: number; time: number };
+  chain?: number;           // extra targets for lightning
+  pool?: { dps: number; time: number; r: number };
+  stun?: number;
   blurb: string;
 }
 
-const SKILLS: Record<SkillId, SkillDef> = {
-  poison: { id: 'poison', name: 'Venom Arrows', costs: [150, 150, 150],
-    describe: r => `Arrows poison for ${[6, 12, 18][r - 1]} dmg/sec (3s), ignoring armor.` },
-  headshot: { id: 'headshot', name: 'Headshot', costs: [200, 200, 200],
-    describe: r => `${[8, 14, 20][r - 1]}% chance to slay a foe outright (bosses take 4x).` },
-  chain: { id: 'chain', name: 'Chain Lightning', costs: [200, 200, 200],
-    describe: r => `Bolts arc to ${r + 1} more enemies.` },
-  freeze: { id: 'freeze', name: 'Deep Freeze', costs: [175, 175, 175],
-    describe: r => `${[12, 20, 28][r - 1]}% chance to freeze a foe solid for 1.5s.` },
-  cluster: { id: 'cluster', name: 'Cluster Bomb', costs: [250, 250, 250],
-    describe: r => `Shells burst into ${[3, 5, 7][r - 1]} extra bomblets.` },
-  napalm: { id: 'napalm', name: 'Napalm', costs: [200, 200, 200],
-    describe: r => `Rockets leave fire that burns for ${[10, 18, 26][r - 1]} dmg/sec.` },
-  bash: { id: 'bash', name: 'Shield Bash', costs: [150, 150, 150],
-    describe: r => `${[12, 22, 32][r - 1]}% chance on hit to stun for 1.5s.` },
-  cleave: { id: 'cleave', name: 'Cleave', costs: [175, 175, 175],
-    describe: r => `Attacks also hit nearby foes for ${[30, 50, 70][r - 1]}% damage.` },
+export const ELEMENT_COLOR: Record<Element, number> = {
+  fire: 0xff7a2a,
+  frost: 0x7fd8ff,
+  storm: 0xc08cff,
+  earth: 0xe0b050,
 };
 
-const base = { hitsAir: true, next: [] as string[] };
+export const ELEMENT_NAME: Record<Element, string> = { fire: 'Fire', frost: 'Frost', storm: 'Storm', earth: 'Earth' };
+
+const t = (s: TowerSpec) => s;
 
 export const TOWERS: Record<string, TowerSpec> = {
-  // ---------------- Archer line ----------------
-  archer1: { ...base, id: 'archer1', kind: 'archer', name: 'Archer Post', tier: 1, cost: 70, range: 145, rate: 0.7, dmg: [4, 7], dmgType: 'physical', next: ['archer2'],
-    blurb: 'Fast, cheap physical damage. Hits flyers.' },
-  archer2: { ...base, id: 'archer2', kind: 'archer', name: 'Archer Tower', tier: 2, cost: 110, range: 150, rate: 0.7, dmg: [7, 11], dmgType: 'physical', next: ['archer3'],
-    blurb: 'Sharper arrows, longer range.' },
-  archer3: { ...base, id: 'archer3', kind: 'archer', name: 'Archer Fort', tier: 3, cost: 160, range: 160, rate: 0.6, dmg: [10, 16], dmgType: 'physical', next: ['ranger', 'marksman'],
-    blurb: 'Veteran bowmen. Ready to specialize!' },
-  ranger: { ...base, id: 'ranger', kind: 'archer', name: "Ranger's Lodge", tier: 4, cost: 230, range: 170, rate: 0.33, dmg: [12, 18], dmgType: 'physical',
-    skill: SKILLS.poison, blurb: 'Blazing-fast volleys of arrows.' },
-  marksman: { ...base, id: 'marksman', kind: 'archer', name: 'Marksman Spire', tier: 4, cost: 250, range: 240, rate: 1.4, dmg: [45, 65], dmgType: 'physical',
-    skill: SKILLS.headshot, blurb: 'Huge range, devastating single shots.' },
+  // ---------------- base crystals ----------------
+  fire: t({ id: 'fire', name: 'Ember Crystal', elements: ['fire'], fused: false, cost: 90, range: 135, rate: 1.2, dmg: [8, 13], dmgType: 'explosive',
+    attack: 'fireball', hitsAir: true, splash: 38, burn: { dps: 4, time: 2 },
+    blurb: 'Lobs fireballs that splash and set foes alight.' }),
+  frost: t({ id: 'frost', name: 'Frost Crystal', elements: ['frost'], fused: false, cost: 80, range: 130, rate: 1.0, dmg: [6, 10], dmgType: 'magic',
+    attack: 'shard', hitsAir: true, slow: { factor: 0.6, time: 1.6 },
+    blurb: 'Ice shards that slow enemies down.' }),
+  storm: t({ id: 'storm', name: 'Storm Crystal', elements: ['storm'], fused: false, cost: 100, range: 145, rate: 0.6, dmg: [4, 8], dmgType: 'magic',
+    attack: 'zap', hitsAir: true, chain: 1,
+    blurb: 'Rapid lightning that arcs to a second foe. Great vs flyers.' }),
+  earth: t({ id: 'earth', name: 'Earth Crystal', elements: ['earth'], fused: false, cost: 110, range: 150, rate: 2.6, dmg: [15, 27], dmgType: 'physical',
+    attack: 'boulder', hitsAir: false, splash: 50,
+    blurb: 'Hurls boulders that crush groups. Ground only.' }),
 
-  // ---------------- Mage line ----------------
-  mage1: { ...base, id: 'mage1', kind: 'mage', name: 'Mage Tower', tier: 1, cost: 100, range: 130, rate: 1.4, dmg: [10, 18], dmgType: 'magic', next: ['mage2'],
-    blurb: 'Magic bolts ignore armor.' },
-  mage2: { ...base, id: 'mage2', kind: 'mage', name: 'Adept Tower', tier: 2, cost: 160, range: 135, rate: 1.5, dmg: [23, 43], dmgType: 'magic', next: ['mage3'],
-    blurb: 'Stronger spells.' },
-  mage3: { ...base, id: 'mage3', kind: 'mage', name: 'Wizard Tower', tier: 3, cost: 240, range: 140, rate: 1.5, dmg: [40, 72], dmgType: 'magic', next: ['arcane', 'frost'],
-    blurb: 'Master wizards. Ready to specialize!' },
-  arcane: { ...base, id: 'arcane', kind: 'mage', name: 'Arcane Spire', tier: 4, cost: 300, range: 150, rate: 1.3, dmg: [70, 120], dmgType: 'magic',
-    skill: SKILLS.chain, blurb: 'Raw arcane power that shreds armor.' },
-  frost: { ...base, id: 'frost', kind: 'mage', name: 'Frost Sanctum', tier: 4, cost: 260, range: 150, rate: 0.9, dmg: [28, 48], dmgType: 'magic', slow: { factor: 0.55, duration: 2 },
-    skill: SKILLS.freeze, blurb: 'Icy bolts slow enemies to a crawl.' },
+  // ---------------- greater (same + same) ----------------
+  inferno: t({ id: 'inferno', name: 'Inferno', elements: ['fire', 'fire'], fused: true, cost: 90, range: 155, rate: 1.25, dmg: [28, 44], dmgType: 'explosive',
+    attack: 'fireball', hitsAir: true, splash: 58, burn: { dps: 10, time: 3 },
+    blurb: 'Huge fireballs and roaring flames.' }),
+  permafrost: t({ id: 'permafrost', name: 'Permafrost', elements: ['frost', 'frost'], fused: true, cost: 90, range: 150, rate: 0.85, dmg: [16, 26], dmgType: 'magic',
+    attack: 'shard', hitsAir: true, slow: { factor: 0.45, time: 2 }, freeze: { chance: 0.15, time: 1.2 },
+    blurb: 'Deep cold: heavy slows and a chance to freeze solid.' }),
+  tempest: t({ id: 'tempest', name: 'Tempest', elements: ['storm', 'storm'], fused: true, cost: 90, range: 165, rate: 0.5, dmg: [11, 18], dmgType: 'magic',
+    attack: 'zap', hitsAir: true, chain: 3,
+    blurb: 'Lightning that leaps between four foes.' }),
+  monolith: t({ id: 'monolith', name: 'Monolith', elements: ['earth', 'earth'], fused: true, cost: 90, range: 175, rate: 2.8, dmg: [55, 90], dmgType: 'physical',
+    attack: 'boulder', hitsAir: false, splash: 72,
+    blurb: 'Enormous stones that flatten whole packs. Ground only.' }),
 
-  // ---------------- Cannon line ----------------
-  cannon1: { ...base, id: 'cannon1', kind: 'cannon', name: 'Bombard', tier: 1, cost: 120, range: 150, rate: 3, dmg: [8, 15], dmgType: 'explosive', splash: 55, hitsAir: false, next: ['cannon2'],
-    blurb: 'Splash damage vs groups. Ground only.' },
-  cannon2: { ...base, id: 'cannon2', kind: 'cannon', name: 'Heavy Bombard', tier: 2, cost: 190, range: 155, rate: 3, dmg: [20, 38], dmgType: 'explosive', splash: 60, hitsAir: false, next: ['cannon3'],
-    blurb: 'Bigger shells, bigger booms.' },
-  cannon3: { ...base, id: 'cannon3', kind: 'cannon', name: 'Siege Works', tier: 3, cost: 280, range: 165, rate: 3, dmg: [32, 58], dmgType: 'explosive', splash: 65, hitsAir: false, next: ['mortar', 'rocket'],
-    blurb: 'Dwarven engineers. Ready to specialize!' },
-  mortar: { ...base, id: 'mortar', kind: 'cannon', name: 'Doom Mortar', tier: 4, cost: 350, range: 195, rate: 3.4, dmg: [65, 110], dmgType: 'explosive', splash: 85, hitsAir: false,
-    skill: SKILLS.cluster, blurb: 'Enormous blasts that flatten crowds.' },
-  rocket: { ...base, id: 'rocket', kind: 'cannon', name: 'Rocket Battery', tier: 4, cost: 330, range: 185, rate: 1.6, dmg: [34, 52], dmgType: 'explosive', splash: 40, hitsAir: true, volley: 2,
-    skill: SKILLS.napalm, blurb: 'Twin homing rockets. Can hit flyers!' },
-
-  // ---------------- Barracks line ----------------
-  barracks1: { ...base, id: 'barracks1', kind: 'barracks', name: 'Militia Barracks', tier: 1, cost: 70, range: 160, rate: 0, dmg: [0, 0], dmgType: 'physical', next: ['barracks2'],
-    soldiers: { count: 3, hp: 60, dmg: [2, 4], armor: 0, rate: 1, respawn: 10, look: 'militia' },
-    blurb: 'Soldiers block the road. Use the flag to move them.' },
-  barracks2: { ...base, id: 'barracks2', kind: 'barracks', name: 'Footmen Barracks', tier: 2, cost: 110, range: 160, rate: 0, dmg: [0, 0], dmgType: 'physical', next: ['barracks3'],
-    soldiers: { count: 3, hp: 100, dmg: [3, 5], armor: 0.15, rate: 1, respawn: 10, look: 'footman' },
-    blurb: 'Tougher soldiers with better gear.' },
-  barracks3: { ...base, id: 'barracks3', kind: 'barracks', name: 'Guard Barracks', tier: 3, cost: 160, range: 170, rate: 0, dmg: [0, 0], dmgType: 'physical', next: ['knights', 'berserkers'],
-    soldiers: { count: 3, hp: 150, dmg: [6, 10], armor: 0.3, rate: 1, respawn: 10, look: 'guard' },
-    blurb: 'Elite guards. Ready to specialize!' },
-  knights: { ...base, id: 'knights', kind: 'barracks', name: 'Knight Hall', tier: 4, cost: 230, range: 180, rate: 0, dmg: [0, 0], dmgType: 'physical',
-    soldiers: { count: 3, hp: 320, dmg: [10, 16], armor: 0.6, rate: 1, respawn: 12, look: 'knight' },
-    skill: SKILLS.bash, blurb: 'Armored knights that hold any line.' },
-  berserkers: { ...base, id: 'berserkers', kind: 'barracks', name: 'Berserker Den', tier: 4, cost: 230, range: 180, rate: 0, dmg: [0, 0], dmgType: 'physical',
-    soldiers: { count: 3, hp: 210, dmg: [20, 30], armor: 0.2, rate: 0.7, respawn: 9, look: 'berserker' },
-    skill: SKILLS.cleave, blurb: 'Furious axe fighters that deal huge damage.' },
+  // ---------------- hybrids ----------------
+  steam: t({ id: 'steam', name: 'Steam Vent', elements: ['fire', 'frost'], fused: true, cost: 90, range: 110, rate: 0.5, dmg: [4, 6], dmgType: 'magic',
+    attack: 'aura', hitsAir: true, slow: { factor: 0.75, time: 0.8 },
+    blurb: 'Scalding clouds burn and slow everything nearby.' }),
+  plasma: t({ id: 'plasma', name: 'Plasma Spire', elements: ['fire', 'storm'], fused: true, cost: 90, range: 160, rate: 0.35, dmg: [11, 17], dmgType: 'explosive',
+    attack: 'plasma', hitsAir: true, burn: { dps: 6, time: 2 },
+    blurb: 'A stream of white-hot plasma bolts.' }),
+  magma: t({ id: 'magma', name: 'Magma Forge', elements: ['fire', 'earth'], fused: true, cost: 90, range: 160, rate: 2.2, dmg: [32, 50], dmgType: 'explosive',
+    attack: 'magma', hitsAir: false, splash: 55, pool: { dps: 14, time: 4, r: 44 },
+    blurb: 'Molten globs that leave burning lava on the road.' }),
+  blizzard: t({ id: 'blizzard', name: 'Blizzard Eye', elements: ['frost', 'storm'], fused: true, cost: 90, range: 160, rate: 0.7, dmg: [13, 20], dmgType: 'magic',
+    attack: 'zap', hitsAir: true, chain: 2, slow: { factor: 0.55, time: 1.5 },
+    blurb: 'Freezing lightning that slows every foe it touches.' }),
+  glacier: t({ id: 'glacier', name: 'Glacier Spire', elements: ['frost', 'earth'], fused: true, cost: 90, range: 160, rate: 2.4, dmg: [28, 42], dmgType: 'physical',
+    attack: 'spikes', hitsAir: false, splash: 58, freeze: { chance: 1, time: 1 },
+    blurb: 'Ice spikes burst from the ground and freeze a whole area.' }),
+  tremor: t({ id: 'tremor', name: 'Tremor Core', elements: ['storm', 'earth'], fused: true, cost: 90, range: 115, rate: 2.4, dmg: [18, 28], dmgType: 'physical',
+    attack: 'aura', hitsAir: false, stun: 0.4,
+    blurb: 'Shockwaves that damage and stun all nearby ground foes.' }),
 };
 
-export const BUILD_OPTIONS: string[] = ['archer1', 'barracks1', 'mage1', 'cannon1'];
+export const BASE_CRYSTALS: Element[] = ['fire', 'frost', 'storm', 'earth'];
 
+/** Which fused tower two elements make. */
+export function fusionOf(a: Element, b: Element): string {
+  if (a === b) return { fire: 'inferno', frost: 'permafrost', storm: 'tempest', earth: 'monolith' }[a];
+  const key = [a, b].sort().join('+');
+  const table: Record<string, string> = {
+    'fire+frost': 'steam', 'fire+storm': 'plasma', 'earth+fire': 'magma',
+    'frost+storm': 'blizzard', 'earth+frost': 'glacier', 'earth+storm': 'tremor',
+  };
+  return table[key];
+}
+
+/** Crystals within this distance of each other can fuse. */
+export const FUSE_RANGE = 105;
 export const SELL_RATIO = 0.6;
 
-export function dps(spec: TowerSpec): number {
-  if (spec.soldiers) {
-    const s = spec.soldiers;
-    return ((s.dmg[0] + s.dmg[1]) / 2 / s.rate) * s.count;
-  }
-  return ((spec.dmg[0] + spec.dmg[1]) / 2 / spec.rate) * (spec.volley ?? 1);
+/** Attunement: 3 ranks, each +35% damage and +8 range. Cost scales with what the crystal is worth. */
+export const ATTUNE_MAX = 3;
+export const ATTUNE_DMG = 0.35;
+export const ATTUNE_RANGE = 8;
+export function attuneCost(value: number, rank: number): number {
+  return Math.round((value * [0.6, 0.85, 1.1][rank]) / 5) * 5;
 }
+
+/* ---------------- energy network ---------------- */
+
+export const CYLINDER_FIELD = 150;
+/** How many crystals each source can power (pylons don't use a slot). */
+export const CYLINDER_CAPACITY = 5;
+export const PYLON = { id: 'pylon', name: 'Conduit Pylon', cost: 40, field: 160, capacity: 3,
+  blurb: 'Relays energy: extends the field and powers up to 3 more crystals.' };
+/** How long a link stays broken after a severing enemy passes through it. */
+export const LINK_CUT_TIME = 3;

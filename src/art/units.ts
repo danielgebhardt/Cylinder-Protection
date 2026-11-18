@@ -340,16 +340,6 @@ const ENEMY_LOOKS: Record<string, Omit<Humanoid, 'w' | 'h'>> = {
   warlord: { s: 2.45, skin: 0x3e7a2a, body: 0x2e2e36, bodyType: 'armor', legs: 0x2a2018, head: 'warlord', helm: 'crown', helmColor: 0x2a2a30, weapon: 'bigaxe', cape: 0x9a1f1f, metal: 0xb0b4bc, eyes: 0xff3a2a, bulk: 1.25 },
 };
 
-export const SOLDIER_LOOKS: Record<string, Omit<Humanoid, 'w' | 'h'>> = {
-  militia: { s: 1, skin: 0xf0c9a0, body: 0x9a7a4a, bodyType: 'tunic', legs: 0x5a4a32, head: 'human', helm: 'cap', helmColor: 0x7a5a32, weapon: 'spear' },
-  footman: { s: 1, skin: 0xf0c9a0, body: 0x6a7a9a, bodyType: 'armor', legs: 0x4a4a5a, head: 'human', helm: 'helmet', helmColor: 0xa0a6b0, weapon: 'sword', shield: 0xc0392b, emblem: 0xf2c14e },
-  guard: { s: 1.05, skin: 0xf0c9a0, body: 0x3a5aa0, bodyType: 'armor', legs: 0x2a3a5a, head: 'human', helm: 'helmet', helmColor: 0xc0c6d0, weapon: 'sword', shield: 0x2f5aa8, emblem: 0xffffff },
-  knight: { s: 1.1, skin: 0xf0c9a0, body: 0xa8b2c0, bodyType: 'armor', legs: 0x6a7280, head: 'human', helm: 'knight', helmColor: 0xd8dee6, weapon: 'sword', shield: 0x2f5aa8, emblem: 0xf2c14e, plume: 0xc0392b },
-  berserker: { s: 1.1, skin: 0xe8b890, body: 0xe8b890, bodyType: 'bare', legs: 0x8f1f1f, head: 'skin', helm: 'horned', helmColor: 0x6b4b36, weapon: 'axe', metal: 0xd0d0d8 },
-  hero: { s: 1.1, skin: 0xf0c9a0, body: 0xd4a017, bodyType: 'armor', legs: 0x8a6a1a, head: 'human', helm: 'knight', helmColor: 0xf2d060, weapon: 'sword', shield: 0xd4a017, emblem: 0xffffff, cape: 0x2f5aa8, plume: 0xffffff },
-};
-
-export const SOLDIER_TEX = { w: 52, h: 54 };
 
 export function generateUnits(scene: Phaser.Scene): void {
   for (const key of Object.keys(ENEMY_TEX)) {
@@ -361,11 +351,6 @@ export function generateUnits(scene: Phaser.Scene): void {
         else if (key === 'wraith') wraith(c, f);
         else humanoid(c, { ...ENEMY_LOOKS[key], w: t.w, h: t.h }, f);
       });
-    }
-  }
-  for (const look of Object.keys(SOLDIER_LOOKS)) {
-    for (let f = 0; f < FRAMES; f++) {
-      tex(scene, `soldier_${look}_${f}`, SOLDIER_TEX.w, SOLDIER_TEX.h, c => humanoid(c, { ...SOLDIER_LOOKS[look], ...SOLDIER_TEX }, f));
     }
   }
   void rgba;
@@ -380,5 +365,4 @@ export function createUnitAnims(scene: Phaser.Scene): void {
     }
   };
   for (const key of Object.keys(ENEMY_TEX)) mk(`enemy_${key}`);
-  for (const look of Object.keys(SOLDIER_LOOKS)) mk(`soldier_${look}`);
 }

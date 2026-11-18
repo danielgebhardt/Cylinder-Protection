@@ -115,27 +115,11 @@ function cyl2(c: Ctx, base: number, x: number, w: number): CanvasGradient {
   return lg(c, x, 0, x + w, 0, [[0, sh(base, -0.2)], [0.3, sh(base, 0.3)], [1, sh(base, -0.45)]]);
 }
 
-function drawSpot(c: Ctx): void {
-  softShadow(c, 50, 34, 46, 17, 0.35);
-  ell(c, 50, 31, 42, 17, lg(c, 0, 14, 0, 48, [[0, '#a8835a'], [1, '#6e4f30']]), 'rgba(42,27,18,0.8)', 2);
-  ell(c, 50, 29, 34, 12, lg(c, 0, 17, 0, 41, [[0, '#8a6a44'], [1, '#b8946a']]), null);
-  for (let i = 0; i < 12; i++) {
-    const a = (i / 12) * Math.PI * 2;
-    const x = 50 + Math.cos(a) * 39, y = 31 + Math.sin(a) * 15;
-    ell(c, x, y, 6, 3.6, lg(c, 0, y - 3, 0, y + 3, [[0, '#c4bba8'], [1, '#7d7466']]), 'rgba(42,27,18,0.7)', 1.2);
-  }
-  limb(c, 50, 30, 50, 11, 2.4, '#7a4a20');
-  rrect(c, 39, 6, 22, 11, 2, lg(c, 0, 6, 0, 17, [[0, '#f0d9aa'], [1, '#c8a878']]), OUT, 1.6);
-  limb(c, 45, 11.5, 55, 11.5, 1, '#7a4a20', '#7a4a20');
-  limb(c, 50, 8.5, 50, 14.5, 1, '#7a4a20', '#7a4a20');
-}
-
 export function generateWorld(scene: Phaser.Scene): void {
   for (const d of ['tree', 'autumn', 'pine', 'snowpine', 'deadtree', 'rock', 'bush', 'flower', 'crystal', 'lava']) {
     tex(scene, `decor_${d}`, 64, 72, c => drawDecor(c, d));
   }
   tex(scene, 'cylinder', 100, 140, c => drawCylinder(c));
-  tex(scene, 'spot', 100, 52, c => drawSpot(c));
 }
 
 /* ------------------------------ level map -------------------------- */

@@ -1,318 +1,215 @@
 import type * as Phaser from 'phaser';
 import { tex, lg, rg, ell, circ, rrect, poly, shape, limb, gloss, softShadow, cyl, hex, sh, rgba, OUT } from './draw';
 import type { Ctx } from './draw';
+import { TOWERS, ELEMENT_COLOR } from '../data/towers';
+import type { TowerSpec } from '../data/towers';
 
 /**
- * Tower art. Bodies are drawn in "design" coordinates where the ground centre is (52, 100),
- * then shifted onto a taller canvas. Moving parts (archers, barrels, orbs, flags) are separate
- * sprites; TOWER_PARTS says where they sit relative to the tower's ground anchor.
+ * Crystal tower art. Each tower is a carved pedestal (static) plus a floating crystal
+ * sprite that bobs, pulses when it fires and dims when the tower loses power.
+ * The pedestal's ground anchor is (45, 100) on a 90 x 116 canvas.
  */
 
-const DX = 3, DY = 44;
-export const TOWER_TEX = { w: 110, h: 168, ox: (52 + DX) / 110, oy: (100 + DY) / 168 };
+export const PED_TEX = { w: 90, h: 116, ox: 0.5, oy: 100 / 116 };
+/** Where the crystal floats, relative to the pedestal ground anchor. */
+export const CRYSTAL_Y: Record<string, number> = {};
+export const PYLON_TEX = { w: 56, h: 124, ox: 0.5, oy: 112 / 124, tipY: -96 };
 
-export type WeaponKind = 'archers' | 'orb' | 'barrel' | 'mortar' | 'rocket' | 'none';
+/* ------------------------------ pedestals --------------------------- */
 
-export interface TowerParts {
-  weapon: WeaponKind;
-  weaponKey: string;
-  /** positions relative to the tower ground anchor */
-  mounts: { x: number; y: number }[];
-  flag?: { x: number; y: number; color: string };
-}
-
-export const TOWER_PARTS: Record<string, TowerParts> = {};
-
-const rel = (x: number, y: number) => ({ x: x - 52, y: y - 100 });
-
-function platform(c: Ctx): void {
-  softShadow(c, 52, 103, 50, 15, 0.45);
-  ell(c, 52, 100, 41, 13.5, lg(c, 0, 88, 0, 114, [[0, '#a59c8a'], [1, '#5f574c']]), OUT, 2);
-  for (let i = 0; i < 14; i++) {
-    const a = (i / 14) * Math.PI * 2;
-    const x = 52 + Math.cos(a) * 36, y = 100 + Math.sin(a) * 11;
-    if (Math.sin(a) < -0.2) continue;
-    ell(c, x, y, 6, 3.6, lg(c, 0, y - 4, 0, y + 4, [[0, '#b8b0a0'], [1, '#7d7466']]), 'rgba(42,27,18,0.7)', 1);
+function runeRing(c: Ctx, cx: number, cy: number, rx: number, ry: number, colors: number[]): void {
+  colors.forEach((col, i) => {
+    const a0 = colors.length === 1 ? 0 : i * Math.PI, a1 = colors.length === 1 ? Math.PI * 2 : (i + 1) * Math.PI;
+    c.save();
+    c.strokeStyle = rgba(col, 0.35); c.lineWidth = 6;
+    c.beginPath(); c.ellipse(cx, cy, rx, ry, 0, a0, a1); c.stroke();
+    c.strokeStyle = hex(shadeUp(col)); c.lineWidth = 2;
+    c.beginPath(); c.ellipse(cx, cy, rx, ry, 0, a0, a1); c.stroke();
+    c.restore();
+  });
+  // rune ticks
+  c.fillStyle = 'rgba(255,255,255,0.75)';
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2;
+    c.fillRect(cx + Math.cos(a) * rx - 1, cy + Math.sin(a) * ry - 1, 2, 2);
   }
-  ell(c, 52, 97, 34, 9.5, lg(c, 0, 88, 0, 106, [[0, '#bdb4a2'], [1, '#948b7a']]), null);
+}
+function shadeUp(c: number): number { return parseInt(sh(c, 0.35).slice(1), 16); }
+
+function pedestal(c: Ctx, spec: TowerSpec): number {
+  const colors = spec.elements.map(e => ELEMENT_COLOR[e]);
+  const fused = spec.fused;
+  const greater = fused && spec.elements[0] === spec.elements[1];
+  softShadow(c, 45, 102, 40, 12, 0.45);
+  // base disc
+  ell(c, 45, 99, 36, 12, lg(c, 0, 87, 0, 111, [[0, '#aaa18f'], [1, '#5f574c']]), OUT, 2);
+  ell(c, 45, 96, 31, 9, lg(c, 0, 87, 0, 105, [[0, '#c4bba8'], [1, '#948b7a']]), null);
+  runeRing(c, 45, 96, 25, 7, colors);
+  // pillar
+  const top = fused ? 50 : 58;
+  const stone = fused ? 0x8f8678 : 0x9d9483;
+  poly(c, [31, 96, 59, 96, 55, top, 35, top], cyl(c, stone, 31, 28), OUT, 2);
+  c.strokeStyle = 'rgba(42,27,18,0.35)'; c.lineWidth = 1;
+  for (let y = top + 9; y < 94; y += 9) { c.beginPath(); c.moveTo(33, y); c.lineTo(57, y); c.stroke(); }
+  // glowing glyph(s) on the pillar
+  colors.forEach((col, i) => {
+    const gx = colors.length === 1 ? 45 : 40 + i * 10, gy = (top + 96) / 2;
+    c.fillStyle = rg(c, gx, gy, 9, [[0, rgba(col, 0.9)], [1, rgba(col, 0)]]);
+    c.fillRect(gx - 9, gy - 9, 18, 18);
+    poly(c, [gx, gy - 6, gx + 3.5, gy, gx, gy + 6, gx - 3.5, gy], hex(shadeUp(col)), 'rgba(42,27,18,0.6)', 1);
+  });
+  // capital / bowl
+  rrect(c, 28, top - 7, 34, 8, 3, lg(c, 0, top - 7, 0, top + 1, [[0, '#d0c8b4'], [1, '#8a8274']]), OUT, 1.8);
+  ell(c, 45, top - 7, 15, 4.5, rg(c, 45, top - 7, 15, [[0, rgba(colors[0], 0.95)], [1, rgba(colors[colors.length - 1], 0.4)]]), OUT, 1.5);
+  if (fused) {
+    // gold trim and side fins for fused towers
+    limb(c, 28, top - 2, 62, top - 2, 1.4, '#e8b830');
+    for (const s of [-1, 1]) poly(c, [45 + s * 17, top - 4, 45 + s * 24, top - 16, 45 + s * 20, top + 6], lg(c, 0, top - 16, 0, top + 6, [[0, sh(colors[s < 0 ? 0 : colors.length - 1], 0.2)], [1, '#6a6255']]), OUT, 1.5);
+  }
+  if (greater) for (const s of [-1, 1]) circ(c, 45 + s * 30, 90, 3, '#e8b830', OUT, 1);
+  return top - 7;
 }
 
-function flagPole(c: Ctx, x: number, y0: number, y1: number): void {
-  limb(c, x, y0, x, y1, 1.8, '#6b4a2a');
-  circ(c, x, y1 - 1, 2, '#d4a017', OUT, 1);
+/* ------------------------------ crystals ----------------------------- */
+
+type CrystalShape = 'flame' | 'spikes' | 'diamond' | 'rock' | 'orb' | 'monolith' | 'shard' | 'twin';
+
+const SHAPE: Record<string, CrystalShape> = {
+  fire: 'flame', frost: 'spikes', storm: 'diamond', earth: 'rock',
+  inferno: 'flame', permafrost: 'spikes', tempest: 'twin', monolith: 'monolith',
+  steam: 'orb', plasma: 'diamond', magma: 'rock', blizzard: 'spikes', glacier: 'shard', tremor: 'rock',
+};
+
+function crystalPaint(c: Ctx, a: number, b: number, x0: number, y0: number, x1: number, y1: number): CanvasGradient {
+  return lg(c, x0, y0, x1, y1, [[0, '#ffffff'], [0.25, sh(a, 0.45)], [0.6, hex(a)], [1, sh(b, -0.25)]]);
 }
 
-function roofTiles(c: Ctx, x0: number, x1: number, base: number, apex: number, ax: number, color: number): void {
-  shape(c, cc => { cc.moveTo(x0, base); cc.lineTo(ax, apex); cc.lineTo(x1, base); cc.quadraticCurveTo(ax, base + 5, x0, base); },
-    lg(c, x0, apex, x1, base, [[0, sh(color, 0.3)], [0.5, hex(color)], [1, sh(color, -0.35)]]), OUT, 2.2);
+function drawCrystal(c: Ctx, spec: TowerSpec, w: number, h: number): void {
+  const cols = spec.elements.map(e => ELEMENT_COLOR[e]);
+  const a = cols[0], b = cols[cols.length - 1];
+  const big = spec.fused ? 1.25 : 1;
+  const cx = w / 2, cy = h / 2;
+  // halo
+  c.fillStyle = rg(c, cx, cy, Math.min(w, h) / 2, [[0, rgba(a, 0.45)], [0.6, rgba(b, 0.15)], [1, rgba(b, 0)]]);
+  c.fillRect(0, 0, w, h);
   c.save();
-  c.beginPath(); c.moveTo(x0, base); c.lineTo(ax, apex); c.lineTo(x1, base); c.quadraticCurveTo(ax, base + 5, x0, base); c.clip();
-  c.strokeStyle = rgba(0x000000, 0.22); c.lineWidth = 1.2;
-  for (let t = 0.25; t < 1; t += 0.2) {
-    const y = apex + (base - apex) * t;
-    c.beginPath(); c.moveTo(ax - (ax - x0) * t - 2, y); c.quadraticCurveTo(ax, y + 4 * t, ax + (x1 - ax) * t + 2, y); c.stroke();
-  }
-  c.fillStyle = 'rgba(255,255,255,0.18)';
-  c.beginPath(); c.moveTo(ax, apex + 2); c.lineTo(x0 + (ax - x0) * 0.35, base); c.lineTo(x0 + (ax - x0) * 0.6, base); c.closePath(); c.fill();
-  c.restore();
-}
-
-function bricks(c: Ctx, x0: number, x1: number, y0: number, y1: number, color: number, rowH = 7): void {
-  c.save();
-  c.beginPath(); c.rect(x0, y0, x1 - x0, y1 - y0); c.clip();
-  c.strokeStyle = rgba(shadeNum(color, -0.5), 0.55); c.lineWidth = 1;
-  let row = 0;
-  for (let y = y0 + rowH; y < y1; y += rowH, row++) {
-    c.beginPath(); c.moveTo(x0, y); c.lineTo(x1, y); c.stroke();
-    for (let x = x0 + (row % 2 ? 4 : 10); x < x1; x += 12) { c.beginPath(); c.moveTo(x, y - rowH); c.lineTo(x, y); c.stroke(); }
-  }
-  c.restore();
-}
-function shadeNum(c: number, a: number): number { return parseInt(sh(c, a).slice(1), 16); }
-
-/* ------------------------------ archer ------------------------------ */
-
-function drawArcherTower(c: Ctx, tier: number, variant: string, id: string): void {
-  platform(c);
-  const h = [0, 30, 36, 42, 46][tier];
-  const top = 96 - h;
-  const wood = variant === 'marksman' ? 0x7a6650 : 0x8a5a32;
-  poly(c, [30, 97, 74, 97, 69, top, 35, top], cyl(c, wood, 30, 44), OUT, 2);
-  c.strokeStyle = rgba(0x2a1b12, 0.45); c.lineWidth = 1.2;
-  for (let y = top + 7; y < 96; y += 7) { c.beginPath(); c.moveTo(31, y); c.lineTo(73, y); c.stroke(); }
-  limb(c, 35, top + 3, 70, 94, 2.2, sh(wood, -0.25));
-  limb(c, 69, top + 3, 34, 94, 2.2, sh(wood, -0.25));
-  // deck & railing
-  rrect(c, 22, top - 8, 60, 9, 2, lg(c, 0, top - 8, 0, top + 1, [[0, sh(wood, 0.35)], [1, sh(wood, -0.2)]]), OUT, 2);
-  for (const x of [25, 39, 65, 79]) rrect(c, x - 2, top - 17, 4, 10, 1, sh(wood, 0.1), OUT, 1.3);
-  limb(c, 24, top - 15, 80, top - 15, 1.8, sh(wood, 0.25));
-  const deckY = top - 8;
-  let roofBase = deckY;
-  if (tier >= 2) {
-    const roof = variant === 'ranger' ? 0x2f8a32 : variant === 'marksman' ? 0x2f5aa8 : [0, 0x9a5a2a, 0xa8442e, 0xb83a2e][Math.min(3, tier)];
-    roofBase = deckY - 34;
-    limb(c, 26, deckY, 26, roofBase, 2.4, sh(wood, -0.1));
-    limb(c, 78, deckY, 78, roofBase, 2.4, sh(wood, -0.1));
-    roofTiles(c, 16, 88, roofBase + 2, roofBase - 26, 52, roof);
-  }
-  if (variant === 'ranger') {
-    for (const [x, y, r] of [[28, 92, 9], [78, 90, 8], [24, 84, 6]] as const) circ(c, x, y, r, rg(c, x, y, r, [[0, '#6ac04a'], [1, '#2f7a2a']], x - 2, y - 3), OUT, 1.4);
-  }
-  const archers = tier >= 3 ? [rel(41, deckY), rel(63, deckY)] : [rel(52, deckY)];
-  const flagColor = variant === 'marksman' ? '#5ab0ff' : variant === 'ranger' ? '#8be04e' : '#f2c14e';
-  let flag: TowerParts['flag'];
-  if (tier >= 3) { flagPole(c, 52, roofBase - 24, roofBase - 46); flag = { ...rel(53, roofBase - 46), color: flagColor }; }
-  TOWER_PARTS[id] = { weapon: 'archers', weaponKey: `archer_${variant || 'basic'}`, mounts: archers, flag };
-}
-
-/* ------------------------------ mage ------------------------------- */
-
-function drawMageTower(c: Ctx, tier: number, variant: string, id: string): void {
-  platform(c);
-  const h = [0, 40, 46, 52, 56][tier];
-  const top = 96 - h;
-  const stone = variant === 'frost' ? 0xb4cfe0 : variant === 'arcane' ? 0x6f6290 : 0xa39888;
-  // flared base
-  poly(c, [26, 97, 78, 97, 72, 86, 32, 86], cyl(c, sh2(stone, -0.1), 26, 52), OUT, 2);
-  rrect(c, 32, top, 40, h, 4, cyl(c, stone, 32, 40), OUT, 2.2);
-  bricks(c, 33, 71, top + 2, 96, stone);
-  // windows
-  const glow = variant === 'frost' ? '#9fe8ff' : variant === 'arcane' ? '#e39bff' : '#ffd36e';
-  for (const [wx, wy] of [[52, top + 12], ...(tier >= 2 ? [[52, top + 30]] : [])] as [number, number][]) {
-    rrect(c, wx - 6, wy - 1, 12, 15, [6, 6, 1, 1], '#2a1f3a', OUT, 1.6);
-    c.fillStyle = rg(c, wx, wy + 8, 9, [[0, glow], [1, 'rgba(0,0,0,0)']]);
-    c.fillRect(wx - 9, wy - 2, 18, 18);
-    rrect(c, wx - 4, wy + 1.5, 8, 11, 3, glow, null);
-    limb(c, wx, wy + 1, wx, wy + 13, 0.8, '#2a1f3a', '#2a1f3a');
-  }
-  // roof
-  const roof = variant === 'frost' ? 0x3f8fd0 : variant === 'arcane' ? 0x5a1fa0 : [0, 0x5c3c9e, 0x5a35a8, 0x6331b8][Math.min(3, tier)];
-  const apex = top - 44;
-  roofTiles(c, 24, 80, top + 2, apex, 52, roof);
-  rrect(c, 24, top - 1, 56, 5, 2, lg(c, 0, top - 1, 0, top + 4, [[0, '#ffe58a'], [1, '#b07a10']]), OUT, 1.4);
-  if (variant === 'frost') {
-    for (const x of [30, 38, 47, 58, 66, 74]) poly(c, [x - 2.5, top + 4, x + 2.5, top + 4, x, top + 10 + (x % 3) * 2], '#e6fbff', '#3f8fd0', 0.8);
-  }
-  if (variant === 'arcane') {
-    for (const [x, y] of [[22, top + 20], [82, top + 30]]) poly(c, [x, y - 7, x + 4, y, x, y + 7, x - 4, y], '#d27cff', OUT, 1.2);
-  }
-  circ(c, 52, apex, 2.5, '#ffd23a', OUT, 1);
-  const flag = tier >= 3 ? { ...rel(77, top - 2), color: variant === 'frost' ? '#8fdcff' : variant === 'arcane' ? '#d27cff' : '#f2c14e' } : undefined;
-  if (flag) flagPole(c, 76, top + 2, top - 20);
-  if (flag) flag.y = top - 20 - 100;
-  TOWER_PARTS[id] = { weapon: 'orb', weaponKey: `orb_${variant || 'basic'}`, mounts: [rel(52, apex - 12)], flag };
-}
-function sh2(c: number, a: number): number { return shadeNum(c, a); }
-
-/* ------------------------------ cannon ----------------------------- */
-
-function drawCannonTower(c: Ctx, tier: number, variant: string, id: string): void {
-  platform(c);
-  const h = [0, 26, 30, 34, 36][tier];
-  const top = 96 - h;
-  const stone = variant === 'rocket' ? 0x9a7a62 : 0x958f84;
-  rrect(c, 20, top, 64, h + 1, 6, cyl(c, stone, 20, 64), OUT, 2.2);
-  bricks(c, 21, 83, top + 1, 96, stone, 8);
-  for (let x = 21; x < 82; x += 13) rrect(c, x, top - 8, 9, 9, 2, lg(c, 0, top - 8, 0, top + 1, [[0, sh(stone, 0.3)], [1, sh(stone, -0.2)]]), OUT, 1.6);
-  for (const x of [34, 70]) { rrect(c, x - 2, top + 10, 4, 10, 1.5, '#1a120c', null); }
-  if (variant === 'mortar') { ell(c, 52, top - 1, 20, 6, '#5a4a3a', OUT, 1.5); }
-  else if (variant === 'rocket') { rrect(c, 36, top - 6, 32, 6, 2, '#4a4a50', OUT, 1.5); }
-  else { rrect(c, 40, top - 7, 24, 7, 2, '#5a3a22', OUT, 1.5); circ(c, 44, top - 2, 4.5, '#6a3d1e', OUT, 1.3); circ(c, 60, top - 2, 4.5, '#6a3d1e', OUT, 1.3); }
-  let flag: TowerParts['flag'];
-  if (tier >= 3) { flagPole(c, 25, top - 4, top - 28); flag = { ...rel(26, top - 28), color: variant === 'rocket' ? '#d23a2a' : variant === 'mortar' ? '#ffa22a' : '#f2c14e' }; }
-  const weapon: WeaponKind = variant === 'mortar' ? 'mortar' : variant === 'rocket' ? 'rocket' : 'barrel';
-  const key = variant === 'mortar' ? 'mortar' : variant === 'rocket' ? 'rocketrack' : `barrel_${tier}`;
-  TOWER_PARTS[id] = { weapon, weaponKey: key, mounts: [rel(52, top - 7)], flag };
-}
-
-/* ------------------------------ barracks --------------------------- */
-
-function drawBarracks(c: Ctx, tier: number, variant: string, id: string): void {
-  platform(c);
-  const wall = variant === 'knights' ? 0xbcb8b0 : variant === 'berserkers' ? 0x7a5a42 : [0, 0xe0c8a0, 0xd8bf94, 0xd0b488][Math.min(3, tier)];
-  const roof = variant === 'knights' ? 0x2f5aa8 : variant === 'berserkers' ? 0x8f1f1f : [0, 0xa0602e, 0xa8482e, 0x983a2b][Math.min(3, tier)];
-  const h = 30 + Math.min(tier, 3) * 3;
-  const top = 96 - h;
-  rrect(c, 22, top, 60, h + 1, 2, lg(c, 22, 0, 82, 0, [[0, sh(wall, 0.2)], [0.5, hex(wall)], [1, sh(wall, -0.3)]]), OUT, 2.2);
-  if (variant === 'knights') bricks(c, 23, 81, top + 1, 96, wall, 7);
-  else {
-    const beam = variant === 'berserkers' ? '#3a2416' : '#6b4226';
-    for (const x of [24, 52, 80]) limb(c, x, top + 1, x, 95, 2.4, beam);
-    limb(c, 23, top + 13, 81, top + 13, 2.2, beam);
-    limb(c, 24, top + 13, 36, 95, 1.6, beam); limb(c, 80, top + 13, 68, 95, 1.6, beam);
-  }
-  // door
-  shape(c, cc => { cc.moveTo(44, 97); cc.lineTo(44, 84); cc.arc(52, 84, 8, Math.PI, 0); cc.lineTo(60, 97); cc.closePath(); }, lg(c, 0, 76, 0, 97, [[0, '#7a4a28'], [1, '#3a2010']]), OUT, 1.8);
-  limb(c, 52, 77, 52, 96, 0.8, '#2a1508', '#2a1508');
-  circ(c, 57, 88, 1.2, '#d4a017', null);
-  // windows
-  for (const x of [32, 72]) {
-    rrect(c, x - 5, top + 17, 10, 9, 1.5, '#ffd36e', OUT, 1.5);
-    limb(c, x, top + 17, x, top + 26, 0.8, OUT, OUT);
-  }
-  // roof (gable seen from the front)
-  roofTiles(c, 12, 92, top + 3, top - 30, 52, roof);
-  // weapon rack / barrels
-  if (tier >= 2) {
-    ell(c, 88, 94, 5, 3, '#6b4226', OUT, 1.2); rrect(c, 83, 84, 10, 11, 3, cyl(c, 0x8a5a32, 83, 10), OUT, 1.4);
-    limb(c, 84, 88, 92, 88, 0.8, '#3a2416', '#3a2416');
-  }
-  const bc = variant === 'knights' ? '#5ab0ff' : variant === 'berserkers' ? '#1a1a1a' : '#c0392b';
-  flagPole(c, 74, top + 6, top - 30);
-  TOWER_PARTS[id] = { weapon: 'none', weaponKey: '', mounts: [], flag: { ...rel(75, top - 30), color: bc } };
-}
-
-/* ------------------------------ moving parts ----------------------- */
-
-function archerFigure(c: Ctx, variant: string, frame: number): void {
-  const cloak = variant === 'ranger' ? 0x2f7a2a : variant === 'marksman' ? 0x2f4a8a : 0x3e6e3a;
-  const ox = 11, oy = 26;
-  softShadow(c, ox, oy - 1, 6, 1.8, 0.3);
-  // body
-  shape(c, cc => { cc.moveTo(ox - 5, oy - 1); cc.lineTo(ox - 4, oy - 12); cc.quadraticCurveTo(ox, oy - 15, ox + 4, oy - 12); cc.lineTo(ox + 5, oy - 1); cc.closePath(); },
-    lg(c, ox - 5, oy - 15, ox + 5, oy, [[0, sh(cloak, 0.3)], [1, sh(cloak, -0.3)]]), OUT, 1.4);
-  // head + hood
-  circ(c, ox, oy - 16, 4.2, '#f0c9a0', OUT, 1.3);
-  shape(c, cc => { cc.arc(ox, oy - 16.5, 4.8, Math.PI * 0.9, Math.PI * 2.05); cc.lineTo(ox - 5.5, oy - 13); cc.closePath(); }, hex(cloak), OUT, 1.2);
-  circ(c, ox + 2, oy - 16, 0.8, '#222', null);
-  // bow
-  const draw = frame === 1;
-  const bx = ox + 6;
-  c.strokeStyle = OUT; c.lineWidth = 3;
-  c.beginPath(); c.arc(bx - 4, oy - 11, 8, -1.1, 1.1); c.stroke();
-  c.strokeStyle = '#a0703a'; c.lineWidth = 1.6; c.stroke();
-  const sx = draw ? bx - 6 : bx - 0.6;
-  c.strokeStyle = '#eee'; c.lineWidth = 0.7;
-  c.beginPath(); c.moveTo(bx - 0.6, oy - 18); c.lineTo(sx, oy - 11); c.lineTo(bx - 0.6, oy - 4); c.stroke();
-  if (draw) { limb(c, sx, oy - 11, bx + 6, oy - 11, 0.8, '#8a5a2a'); poly(c, [bx + 5, oy - 12.5, bx + 8, oy - 11, bx + 5, oy - 9.5], '#ccc', null); }
-  limb(c, ox + 2, oy - 10, draw ? sx : bx + 1, oy - 11, 1.6, hex(cloak));
-  if (variant === 'marksman') { limb(c, ox - 3, oy - 7, ox - 5, oy - 1, 1, '#c9b27a'); }
-}
-
-function barrel(c: Ctx, tier: number): void {
-  const len = 22 + tier * 3, th = 9 + tier * 1.4;
-  const cy = 12;
-  // pivot is at (8, cy)
-  shape(c, cc => {
-    cc.moveTo(8, cy - th / 2); cc.lineTo(8 + len, cy - th / 2.6); cc.lineTo(8 + len, cy + th / 2.6); cc.lineTo(8, cy + th / 2); cc.closePath();
-  }, lg(c, 0, cy - th / 2, 0, cy + th / 2, [[0, '#7a7f88'], [0.35, '#4a4d55'], [1, '#18191d']]), OUT, 1.8);
-  rrect(c, 8 + len - 3, cy - th / 2.2, 5, th / 1.1, 1.5, '#3a3d44', OUT, 1.4);
-  ell(c, 8 + len + 2, cy, 1.6, th / 3.4, '#0a0a0a', null);
-  rrect(c, 12, cy - th / 2 - 0.5, 3, th + 1, 1, '#d4a017', OUT, 1);
-  circ(c, 8, cy, th / 2 + 1.5, rg(c, 8, cy, th, [[0, '#7a7f88'], [1, '#2a2b30']], 6, cy - 2), OUT, 1.6);
-  gloss(c, 20, cy - th / 4, 7, 1.2, 0.35, 0);
-}
-
-function mortar(c: Ctx): void {
-  ell(c, 22, 26, 16, 5, '#4a3a2a', OUT, 1.6);
-  shape(c, cc => { cc.moveTo(8, 24); cc.quadraticCurveTo(6, 8, 13, 3); cc.lineTo(31, 3); cc.quadraticCurveTo(38, 8, 36, 24); cc.closePath(); },
-    lg(c, 6, 0, 38, 0, [[0, '#8a5a1a'], [0.3, '#e0a850'], [0.6, '#b5803a'], [1, '#6a4010']]), OUT, 2);
-  ell(c, 22, 4, 10, 3.5, '#1a1208', OUT, 1.6);
-  rrect(c, 9, 13, 26, 3, 1, '#d4a017', OUT, 1);
-}
-
-function rocketRack(c: Ctx): void {
-  rrect(c, 4, 14, 34, 8, 2, lg(c, 0, 14, 0, 22, [[0, '#6a6a72'], [1, '#2a2a30']]), OUT, 1.6);
-  for (let i = 0; i < 3; i++) {
-    const y = 4 + i * 5;
-    rrect(c, 6, y, 26, 5, 2, lg(c, 0, y, 0, y + 5, [[0, '#9a9aa2'], [1, '#4a4a50']]), OUT, 1.2);
-    poly(c, [32, y + 0.5, 37, y + 2.5, 32, y + 4.5], '#d23a2a', OUT, 1);
-  }
-}
-
-function orb(c: Ctx, variant: string): void {
-  const s = 30, m = s / 2;
-  const col = variant === 'frost' ? ['#ffffff', '#9fe8ff', '#3f8fd0'] : variant === 'arcane' ? ['#ffe6ff', '#d27cff', '#6a1fb0'] : ['#fffbe0', '#ffd36e', '#d48a10'];
-  c.fillStyle = rg(c, m, m, m, [[0, rgba(0xffffff, 0.5)], [1, 'rgba(255,255,255,0)']]);
-  c.fillRect(0, 0, s, s);
-  if (variant === 'frost') {
-    for (let i = 0; i < 3; i++) {
-      c.save(); c.translate(m, m); c.rotate((i * Math.PI) / 3);
-      poly(c, [0, -11, 2.5, 0, 0, 11, -2.5, 0], lg(c, 0, -11, 0, 11, [[0, col[0]], [1, col[1]]]), col[2], 1);
-      c.restore();
+  c.translate(cx, cy);
+  c.scale(big, big);
+  const edge = 'rgba(30,20,40,0.85)';
+  switch (SHAPE[spec.id]) {
+    case 'flame':
+      shape(c, cc => { cc.moveTo(0, -16); cc.bezierCurveTo(9, -6, 10, 4, 0, 13); cc.bezierCurveTo(-10, 4, -9, -6, 0, -16); },
+        lg(c, 0, -16, 0, 13, [[0, '#fff6c0'], [0.35, '#ffcf4a'], [0.7, hex(a)], [1, '#c0300a']]), edge, 1.6);
+      shape(c, cc => { cc.moveTo(0, -7); cc.bezierCurveTo(4, -2, 4, 4, 0, 8); cc.bezierCurveTo(-4, 4, -4, -2, 0, -7); }, 'rgba(255,255,220,0.85)', null);
+      if (spec.fused) for (const s of [-1, 1]) shape(c, cc => { cc.moveTo(s * 6, -2); cc.quadraticCurveTo(s * 14, -6, s * 12, -14); cc.quadraticCurveTo(s * 9, -6, s * 4, 4); cc.closePath(); }, '#ffb347', edge, 1.2);
+      break;
+    case 'spikes': {
+      const n = spec.fused ? 5 : 3;
+      for (let i = 0; i < n; i++) {
+        const ang = (i - (n - 1) / 2) * 0.38;
+        c.save(); c.rotate(ang);
+        const len = i === (n - 1) / 2 ? 17 : 12;
+        poly(c, [0, -len, 4.5, -len + 6, 3.5, 10, -3.5, 10, -4.5, -len + 6], crystalPaint(c, a, b, -4, -len, 4, 10), edge, 1.3);
+        c.strokeStyle = 'rgba(255,255,255,0.7)'; c.lineWidth = 0.9; c.beginPath(); c.moveTo(0, -len + 1); c.lineTo(0, 8); c.stroke();
+        c.restore();
+      }
+      if (spec.id === 'blizzard') { c.strokeStyle = '#ffffff'; c.lineWidth = 1.2; for (let k = 0; k < 3; k++) { c.save(); c.rotate(k * Math.PI / 3); c.beginPath(); c.moveTo(0, -5); c.lineTo(0, 5); c.stroke(); c.restore(); } }
+      break;
     }
-  } else if (variant === 'arcane') {
-    poly(c, [m, m - 12, m + 6, m, m, m + 12, m - 6, m], lg(c, m - 6, m - 12, m + 6, m + 12, [[0, col[0]], [0.5, col[1]], [1, col[2]]]), OUT, 1.4);
-    c.strokeStyle = 'rgba(255,255,255,0.7)'; c.lineWidth = 1; c.beginPath(); c.moveTo(m, m - 11); c.lineTo(m, m + 11); c.stroke();
-  } else {
-    circ(c, m, m, 6.5, rg(c, m, m, 7, [[0, col[0]], [0.6, col[1]], [1, col[2]]], m - 2, m - 2), OUT, 1.4);
-    gloss(c, m - 2, m - 2.5, 2.2, 1.2, 0.8);
+    case 'diamond':
+      poly(c, [0, -17, 10, -3, 0, 14, -10, -3], crystalPaint(c, a, b, -10, -17, 10, 14), edge, 1.6);
+      poly(c, [-10, -3, 10, -3, 0, 14], 'rgba(0,0,0,0.15)', null);
+      poly(c, [0, -17, 3, -3, 0, 14, -3, -3], 'rgba(255,255,255,0.35)', null);
+      c.strokeStyle = spec.id === 'plasma' ? '#fff2d0' : '#ffffff'; c.lineWidth = 1.4;
+      c.beginPath(); c.moveTo(-2, -11); c.lineTo(2, -5); c.lineTo(-2, 0); c.lineTo(2, 6); c.stroke();
+      break;
+    case 'twin':
+      for (const [dx, dy, s] of [[-6, -4, 0.75], [6, 2, 0.85]] as const) {
+        c.save(); c.translate(dx, dy); c.scale(s, s);
+        poly(c, [0, -17, 10, -3, 0, 14, -10, -3], crystalPaint(c, a, b, -10, -17, 10, 14), edge, 1.8);
+        c.strokeStyle = '#ffffff'; c.lineWidth = 1.6; c.beginPath(); c.moveTo(-2, -11); c.lineTo(2, -5); c.lineTo(-2, 0); c.lineTo(2, 6); c.stroke();
+        c.restore();
+      }
+      break;
+    case 'rock': {
+      const stone = spec.id === 'magma' ? 0x4a2a1e : spec.id === 'tremor' ? 0x5a5060 : 0x7a6040;
+      poly(c, [-11, -6, -5, -14, 6, -13, 12, -4, 10, 8, 0, 13, -10, 8], lg(c, -11, -14, 12, 13, [[0, sh(stone, 0.35)], [1, sh(stone, -0.35)]]), edge, 1.6);
+      // glowing core / veins
+      const vein = spec.id === 'magma' ? 0xff7a2a : spec.id === 'tremor' ? ELEMENT_COLOR.storm : a;
+      c.fillStyle = rg(c, 0, 0, 9, [[0, '#ffffff'], [0.3, hex(shadeUp(vein))], [1, rgba(vein, 0)]]);
+      c.beginPath(); c.arc(0, 0, 9, 0, Math.PI * 2); c.fill();
+      c.strokeStyle = hex(shadeUp(vein)); c.lineWidth = 1.6;
+      c.beginPath(); c.moveTo(-8, -8); c.lineTo(-2, -2); c.lineTo(-6, 5); c.moveTo(7, -9); c.lineTo(2, -1); c.lineTo(8, 5); c.stroke();
+      gloss(c, -4, -9, 3, 1.5, 0.35);
+      break;
+    }
+    case 'orb':
+      circ(c, 0, 0, 11, rg(c, 0, 0, 12, [[0, '#ffffff'], [0.4, sh(a, 0.3)], [1, hex(b)]], -3, -4), edge, 1.6);
+      c.strokeStyle = 'rgba(255,255,255,0.8)'; c.lineWidth = 1.4;
+      c.beginPath(); c.arc(0, 0, 6, 0.3, 2.6); c.stroke();
+      c.beginPath(); c.arc(0, 0, 8.5, 3.4, 5.6); c.stroke();
+      gloss(c, -4, -5, 3.2, 1.8, 0.7);
+      break;
+    case 'monolith':
+      poly(c, [-7, -17, 7, -15, 9, 14, -9, 14], lg(c, -9, 0, 9, 0, [[0, '#9a8060'], [0.4, '#c0a070'], [1, '#5a4430']]), edge, 1.6);
+      c.fillStyle = hex(shadeUp(a));
+      for (const [gx, gy] of [[0, -9], [-2, -1], [1, 7]]) { c.fillRect(gx - 2, gy - 1, 5, 2); c.fillRect(gx, gy - 3, 1.5, 6); }
+      c.fillStyle = rg(c, 0, -2, 12, [[0, rgba(a, 0.5)], [1, rgba(a, 0)]]); c.fillRect(-12, -14, 24, 24);
+      break;
+    case 'shard':
+      poly(c, [-2, -18, 7, -6, 5, 8, -6, 10, -8, -4], crystalPaint(c, a, a, -8, -18, 7, 10), edge, 1.6);
+      poly(c, [-12, 10, -6, 4, 6, 4, 12, 10, 0, 14], lg(c, 0, 4, 0, 14, [[0, '#a08060'], [1, '#5a4430']]), edge, 1.4);
+      c.strokeStyle = 'rgba(255,255,255,0.8)'; c.lineWidth = 1; c.beginPath(); c.moveTo(-1, -14); c.lineTo(0, 4); c.stroke();
+      break;
   }
+  c.restore();
 }
 
-function banner(c: Ctx, color: string, frame: number): void {
-  const ph = frame * 2.1;
-  shape(c, cc => {
-    cc.moveTo(1, 2);
-    cc.bezierCurveTo(7, 2 + Math.sin(ph) * 2.5, 13, 2 - Math.sin(ph) * 2.5, 20, 3 + Math.sin(ph + 1) * 2);
-    cc.lineTo(16, 8 + Math.sin(ph + 2) * 1.5);
-    cc.lineTo(20, 13 + Math.sin(ph + 1) * 2);
-    cc.bezierCurveTo(13, 14 - Math.sin(ph) * 2.5, 7, 14 + Math.sin(ph) * 2.5, 1, 14);
-    cc.closePath();
-  }, lg(c, 0, 0, 20, 14, [[0, color], [1, sh(parseInt(color.slice(1), 16), -0.35)]]), OUT, 1.3);
+/* ------------------------------ pylon -------------------------------- */
+
+function drawPylon(c: Ctx): void {
+  softShadow(c, 28, 114, 22, 7, 0.45);
+  ell(c, 28, 111, 20, 7, lg(c, 0, 104, 0, 118, [[0, '#a59c8a'], [1, '#5f574c']]), OUT, 1.8);
+  runeRing(c, 28, 109, 14, 4.2, [0x5ad0ff]);
+  poly(c, [17, 109, 39, 109, 33, 30, 23, 30], cyl(c, 0x8a8a96, 17, 22), OUT, 2);
+  c.strokeStyle = 'rgba(90,208,255,0.9)'; c.lineWidth = 1.6;
+  c.beginPath(); c.moveTo(28, 100); c.lineTo(28, 40); c.stroke();
+  for (const y of [55, 75, 95]) { rrect(c, 20 + (y - 30) * 0.03, y - 2, 16 - (y - 30) * 0.06, 4, 1.5, '#e8b830', OUT, 1); }
+  // claws holding the crystal
+  for (const s of [-1, 1]) poly(c, [28 + s * 5, 32, 28 + s * 12, 18, 28 + s * 8, 14, 28 + s * 3, 26], lg(c, 0, 14, 0, 32, [[0, '#c0c0cc'], [1, '#6a6a76']]), OUT, 1.4);
+  poly(c, [28, 4, 34, 16, 28, 30, 22, 16], lg(c, 22, 4, 34, 30, [[0, '#ffffff'], [0.4, '#9feaff'], [1, '#2a8ac0']]), 'rgba(20,40,60,0.9)', 1.6);
+  poly(c, [28, 4, 30, 16, 28, 30, 26, 16], 'rgba(255,255,255,0.45)', null);
 }
 
-/* ------------------------------ registration ----------------------- */
+/* ------------------------------ projectiles ------------------------- */
+
+function generateProjectiles(scene: Phaser.Scene): void {
+  tex(scene, 'iceshard', 24, 10, c => {
+    poly(c, [0, 5, 8, 1, 24, 5, 8, 9], lg(c, 0, 0, 24, 0, [[0, '#4aa8e0'], [0.6, '#bff4ff'], [1, '#ffffff']]), '#2a6a9a', 1.2);
+  });
+  tex(scene, 'boulder', 20, 20, c => {
+    poly(c, [3, 9, 7, 3, 14, 2, 18, 8, 16, 16, 8, 18, 3, 14], lg(c, 3, 2, 18, 18, [[0, '#b8a080'], [1, '#5a4430']]), OUT, 1.6);
+    c.strokeStyle = 'rgba(255,200,90,0.9)'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(8, 6); c.lineTo(11, 10); c.lineTo(9, 14); c.stroke();
+  });
+  tex(scene, 'magmaglob', 20, 20, c => {
+    c.fillStyle = rg(c, 10, 10, 10, [[0, 'rgba(255,200,90,0.9)'], [1, 'rgba(255,90,20,0)']]); c.fillRect(0, 0, 20, 20);
+    poly(c, [4, 9, 8, 4, 14, 4, 16, 10, 13, 16, 6, 15], rg(c, 10, 10, 8, [[0, '#ffd36e'], [0.5, '#e0501a'], [1, '#4a1a0a']], 8, 8), '#2a0a00', 1.4);
+  });
+}
+
+/* ------------------------------ registration ------------------------ */
 
 export function generateTowers(scene: Phaser.Scene): void {
-  const list: [string, (c: Ctx, tier: number, variant: string, id: string) => void, number, string][] = [
-    ['archer1', drawArcherTower, 1, ''], ['archer2', drawArcherTower, 2, ''], ['archer3', drawArcherTower, 3, ''], ['ranger', drawArcherTower, 4, 'ranger'], ['marksman', drawArcherTower, 4, 'marksman'],
-    ['mage1', drawMageTower, 1, ''], ['mage2', drawMageTower, 2, ''], ['mage3', drawMageTower, 3, ''], ['arcane', drawMageTower, 4, 'arcane'], ['frost', drawMageTower, 4, 'frost'],
-    ['cannon1', drawCannonTower, 1, ''], ['cannon2', drawCannonTower, 2, ''], ['cannon3', drawCannonTower, 3, ''], ['mortar', drawCannonTower, 4, 'mortar'], ['rocket', drawCannonTower, 4, 'rocket'],
-    ['barracks1', drawBarracks, 1, ''], ['barracks2', drawBarracks, 2, ''], ['barracks3', drawBarracks, 3, ''], ['knights', drawBarracks, 4, 'knights'], ['berserkers', drawBarracks, 4, 'berserkers'],
-  ];
-  for (const [id, fn, tier, variant] of list) {
-    tex(scene, `tower_${id}`, TOWER_TEX.w, TOWER_TEX.h, c => { c.translate(DX, DY); fn(c, tier, variant, id); });
+  for (const spec of Object.values(TOWERS)) {
+    let bowl = 0;
+    tex(scene, `ped_${spec.id}`, PED_TEX.w, PED_TEX.h, c => { bowl = pedestal(c, spec); });
+    CRYSTAL_Y[spec.id] = bowl - 100 - (spec.fused ? 20 : 16);
+    const s = spec.fused ? 56 : 46;
+    tex(scene, `crystal_${spec.id}`, s, s, c => drawCrystal(c, spec, s, s));
   }
-  for (const v of ['basic', 'ranger', 'marksman']) for (const f of [0, 1]) tex(scene, `archer_${v}_${f}`, 26, 28, c => archerFigure(c, v === 'basic' ? '' : v, f));
-  for (const t of [1, 2, 3]) tex(scene, `barrel_${t}`, 46, 24, c => barrel(c, t));
-  tex(scene, 'mortar', 44, 32, c => mortar(c));
-  tex(scene, 'rocketrack', 42, 26, c => rocketRack(c));
-  for (const v of ['basic', 'arcane', 'frost']) tex(scene, `orb_${v}`, 30, 30, c => orb(c, v));
-  const colors = new Set(Object.values(TOWER_PARTS).map(p => p.flag?.color).filter(Boolean) as string[]);
-  for (const col of colors) for (let f = 0; f < 3; f++) tex(scene, `flag_${col.slice(1)}_${f}`, 22, 17, c => banner(c, col, f));
-  for (const col of colors) {
-    const key = `flag_${col.slice(1)}`;
-    if (!scene.anims.exists(key)) scene.anims.create({ key, frames: [0, 1, 2, 1].map(i => ({ key: `${key}_${i}` })), frameRate: 6, repeat: -1 });
+  tex(scene, 'pylon', PYLON_TEX.w, PYLON_TEX.h, c => drawPylon(c));
+  for (const [el, col] of Object.entries(ELEMENT_COLOR)) {
+    tex(scene, `orbit_${el}`, 12, 16, c => poly(c, [6, 0, 11, 7, 6, 16, 1, 7], lg(c, 0, 0, 12, 16, [[0, '#ffffff'], [0.4, sh(col, 0.3)], [1, hex(col)]]), 'rgba(30,20,40,0.8)', 1));
   }
+  generateProjectiles(scene);
 }

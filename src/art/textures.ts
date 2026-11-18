@@ -4,8 +4,8 @@ import { generateWorld } from './world';
 import { generateUnits, createUnitAnims } from './units';
 import { generateTowers } from './towers';
 
-export { TOWER_TEX, TOWER_PARTS } from './towers';
-export { ENEMY_TEX, SOLDIER_TEX } from './units';
+export { PED_TEX, PYLON_TEX, CRYSTAL_Y } from './towers';
+export { ENEMY_TEX } from './units';
 export { shade } from './draw';
 
 /** Paint every texture at the device's render scale and register animations. */
