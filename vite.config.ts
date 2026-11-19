@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
 import type { Plugin } from 'vite';
+import { webApp } from './scripts/lib/webapp';
 
 /**
  * Phaser 4 picks each pixel's texture with an exact float comparison on an interpolated
@@ -29,8 +30,10 @@ function phaserTextureIndexFix(): Plugin {
 }
 
 export default defineConfig({
+  // Relative, so the same build works in Capacitor and under /Cylinder-Protection/ on GitHub Pages.
   base: './',
-  plugins: [phaserTextureIndexFix()],
+  // webApp(): installable web app (manifest, icons, offline service worker), see scripts/lib/webapp.ts
+  plugins: [phaserTextureIndexFix(), webApp()],
   // Serve Phaser through the plugin pipeline in dev too (pre-bundling would skip the fix).
   optimizeDeps: { exclude: ['phaser'] },
   build: {

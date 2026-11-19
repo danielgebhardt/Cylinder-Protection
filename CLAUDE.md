@@ -1,8 +1,10 @@
 # Cylinder Protection — project notes for Claude
 
-Fantasy tower-defense game for Android (and browser) by the repo owner. **TypeScript + Phaser 4.2 +
+Fantasy tower-defense game for Android, iOS and the browser by the repo owner. **TypeScript + Phaser 4.2 +
 Vite 8 + Capacitor 8**, TypeScript 7. The owner tests on an Android phone via the release APK
-link and gives design direction; Claude makes the decisions within that direction.
+link and gives design direction; Claude makes the decisions within that direction. The owner's
+family mainly plays the **installable web app** on iPhone/iPad (GitHub Pages), so it must keep
+working offline and from the home-screen icon.
 
 ## Current state (Nov 2026)
 
@@ -49,7 +51,15 @@ src/scenes/            BootScene (waits for fonts, generates textures), MenuScen
 src/ui/                RadialMenu (petal bloom menu), widgets (panel, button, iconButton)
 tools/                 Playwright playtest scripts (see Testing)
 android/               Capacitor project (committed); sideload.keystore committed on purpose
+ios/                   Capacitor iOS project (committed, Swift Package Manager, no CocoaPods)
+scripts/lib/iconart.ts dependency-free PNG decode/resample/encode; iOS + web icons from assets/*.png
+scripts/lib/webapp.ts  Vite plugin: manifest.webmanifest, icons, apple-touch-icon, sw.js (+ dev serving)
+scripts/icon.ts        writes the iOS AppIcon-1024.png + launch logo (gitignored), run by `npm run ios`
 ```
+
+main.ts also registers `sw.js` (only `import.meta.env.PROD` and not `Capacitor.isNativePlatform()`),
+calls `navigator.storage.persist()`, and emits `apppause` when a phone turns to portrait (index.html
+then covers the game with a "turn your device sideways" hint; browsers can't lock orientation).
 
 GameScene owns the world API used by entities (`damageEnemy`, `damageArea`, `pickTarget`,
 `spawnEnemy`, `addFire`, `healArea`, `enemyLeaked`, `fx`), the HUD (moon track, dock, info bar,
@@ -72,6 +82,22 @@ tips, tutorial), menus (`openBuildMenu`, `openStructureMenu`, `build`, `buildPyl
   centre, y < 100) or the dock (bottom centre, y > 625, x 390–890).
 - Severing enemy test, AI sim and placement all use `cantPlace(x, y, pylon?)`; reasons:
   hud | edge | road | crowded | power | full.
+- **Web app**: Vite `base` must stay `'./'` (Pages serves under `/Cylinder-Protection/`, Capacitor
+  from its own root). Files emitted in `generateBundle` aren't in the bundle keys, so webapp.ts adds
+  them to the precache list explicitly; the plugin is `enforce: 'post'` so index.html is included.
+  The SW cache version hashes every file's name + content. index.html keeps `#game` inside
+  `env(safe-area-inset-*)`. Saves are plain `localStorage` (no Capacitor Preferences); on iOS the
+  home-screen app and a Safari tab have separate storage. Audio resumes whenever
+  `ctx.state !== 'running'` (iOS uses `'interrupted'`). The game has no haptics.
+- **Icons**: Android resources are committed and untouched (capacitor-assets output). The iOS icon
+  (opaque RGB, no alpha) and launch logo and the web icons are rasterised from `assets/icon-*.png`
+  at build time; never commit them (ios/.gitignore). iOS launch background `#14240F` matches the
+  Android splash; the launch logo is 200 pt in `LaunchScreen.storyboard`.
+- iOS Info.plist: landscape only (like Android's sensorLandscape), UIRequiresFullScreen, status bar
+  hidden, arm64, ITSAppUsesNonExemptEncryption=false. `capacitor.config.json` and `ios/App/App/public`
+  are generated (gitignored).
+- Chromium 157's CDP `Page.getInstallabilityErrors` returns `[]` even when the manifest 404s, so
+  tools/webapp-check.cjs also checks the fetched manifest and every icon itself.
 
 ## Testing (cloud sessions have Chromium + Playwright preinstalled)
 
@@ -82,7 +108,12 @@ node tools/shot.cjs 'http://localhost:5173/?level=0&debug' /tmp/x.png 3000
 node tools/battle-shot.cjs 3 /tmp/battle.png 6        # scripted battle; 4th arg 2 = phone density
 node tools/texture-sheet.cjs /tmp/sheet.png '^enemy_' 1.3
 node tools/sim.cjs 0,1,2,3,4 balanced                  # balance check (~1.5 min per level)
+npm run build && node tools/webapp-check.cjs [shot.png] # web app: installable, SW control, offline boot
 ```
+
+webapp-check serves `dist/` under `/Cylinder-Protection/` like Pages, checks CDP installability +
+manifest + icons, that the service worker controls the page after a reload, and that with
+`context.setOffline(true)` a reload still boots the menu and `?level=0` starts. Exit code 1 on failure.
 
 URL params: `?level=N` (0-based) jumps into a level, `?debug` gives 99999 moonlight, `?res=2`.
 `window.__scene` exposes the GameScene for scripting. Swiftshader prints harmless "GPU stall due to
@@ -94,13 +125,30 @@ Mirrormere 20, Frosted Hollow 20, Hollow King's Court 17. The AI is deterministi
 `nofuse` must do worse than `balanced` (fusion has to be worth it). Real players are likely weaker
 than this AI on first play.
 
-## Release / Android
+## Release / Android, iOS, web app
 
-- Every push to `main` runs `.github/workflows/android.yml`: builds the web bundle, `cap sync`,
-  `assembleDebug` signed with `android/app/sideload.keystore` (so updates install over old versions
-  and keep saves), then replaces the APK on the rolling `latest` pre-release:
+`.github/workflows/android.yml` ("Android, iOS and web app") runs on **every push to any branch**
+(and PRs). Jobs:
+
+- `apk` (every push): builds the web bundle, `cap sync`, `assembleDebug` signed with
+  `android/app/sideload.keystore` (so updates install over old versions and keep saves). On main it
+  also uploads `dist/` as the Pages artifact.
+- `publish` (main): moves the `latest` tag and replaces the APK on the rolling `latest` pre-release:
   **https://github.com/danielgebhardt/Cylinder-Protection/releases/download/latest/cylinder-protection.apk**
   (same pattern as the owner's `the-wardens-flame` repo).
+- `pages` (main, needs apk): deploys the web app to
+  **https://danielgebhardt.github.io/Cylinder-Protection/**. Repo Settings → Pages → Source must be
+  "GitHub Actions" (GITHUB_TOKEN can't enable it). The container can't reach *.github.io: ask the
+  owner to check the live site.
+- `ios` (every push, macos-26, needs apk + publish so the release exists on main): `npm run ios`,
+  unsigned `xcodebuild` Release for `generic/platform=iOS`, zips `Payload/App.app` into
+  `cylinder-protection.ipa` (artifact `cylinder-protection-ipa`); on main
+  `gh release upload latest cylinder-protection.ipa --clobber`:
+  **https://github.com/danielgebhardt/Cylinder-Protection/releases/download/latest/cylinder-protection.ipa**
+  Sideloaded with a free Apple ID (AltStore, or Xcode with a Personal Team): 7-day expiry, 3 apps.
+- Workflow: work on a branch, push it and watch the `ios` job pass, then push `main`. No PRs.
+- Verify the .ipa: `gh run download <id> -n cylinder-protection-ipa`, `unzip -l` must list
+  `Payload/App.app/Frameworks/Capacitor.framework`, `public/index.html` and `public/assets/index-*.js`.
 - If the build fails with Maven Central HTTP 429 it's transient: `gh run rerun <id> --failed`.
 - The Android SDK can't be downloaded in the cloud container (dl.google.com blocked); rely on CI.
 - Verify a release: download the link, `unzip -p app.apk 'assets/public/assets/index-*.js' | grep -c "<new string>"`.
@@ -111,3 +159,4 @@ than this AI on first play.
 - Low-detail toggle (weather/particles) if late waves stutter on the phone.
 - Between-level upgrades bought with stars; more levels; music.
 - Gradle caching in CI to avoid Maven rate limits.
+- An in-game hint on iOS Safari (not standalone) pointing to Share → Add to Home Screen.

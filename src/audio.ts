@@ -19,7 +19,8 @@ function ac(): AudioContext | null {
     const d = noiseBuf.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
   }
-  if (ctx.state === 'suspended') void ctx.resume();
+  // 'suspended' until a gesture; iOS also reports 'interrupted' (calls, other apps, backgrounding)
+  if (ctx.state !== 'running' && ctx.state !== 'closed') void ctx.resume().catch(() => {});
   return ctx;
 }
 

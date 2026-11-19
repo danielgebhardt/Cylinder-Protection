@@ -1,11 +1,16 @@
-name: Android app
+name: Android, iOS and web app
 
 # Builds the sideloadable Android app, keeps the APK as an artifact and, for main,
 # publishes it at a fixed link anyone can install from:
 # https://github.com/danielgebhardt/Cylinder-Protection/releases/download/latest/cylinder-protection.apk
+# On main the same web bundle is deployed to GitHub Pages as an installable web app:
+# https://danielgebhardt.github.io/Cylinder-Protection/
+# Every push also builds an unsigned iOS app (macOS minutes are free for public repos); on
+# main it is attached to the same release:
+# https://github.com/danielgebhardt/Cylinder-Protection/releases/download/latest/cylinder-protection.ipa
 on:
   push:
-    branches: [main]
+    branches: ['**']
   pull_request:
   workflow_dispatch:
 
@@ -31,6 +36,12 @@ jobs:
         run: npm ci
       - name: Typecheck, build the web bundle and sync it into the Android project
         run: npm run cap:sync
+      # The same bundle is the installable web app on GitHub Pages (see the pages job).
+      - name: Keep the web bundle for GitHub Pages
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4.0.0
+        with:
+          path: dist
       - name: Assemble the APK
         working-directory: android
         # The runner image ships JDK 21 and the Android SDK; Capacitor needs 21, but the
@@ -87,3 +98,72 @@ jobs:
               --notes "$notes" --prerelease --latest=false
           fi
           gh release upload latest cylinder-protection.apk --clobber
+
+  # Installable web app (iPhone/iPad "Add to Home Screen", Android "Install app"), offline.
+  # Needs repo Settings > Pages > Source = GitHub Actions (GITHUB_TOKEN can't switch it on).
+  pages:
+    name: Deploy the web app to GitHub Pages
+    needs: apk
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5.0.0
+        with:
+          enablement: true
+      - id: deploy
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5
+
+  # Unsigned iOS app for sideloading with a free Apple ID (Xcode or AltStore sign it on
+  # install). Built on every push as a check; attached to the latest release from main.
+  # Waits for publish on main so the release already exists; runs without it elsewhere.
+  ios:
+    name: Build the unsigned iOS app
+    needs: [apk, publish]
+    if: ${{ !cancelled() && needs.apk.result == 'success' && needs.publish.result != 'failure' }}
+    runs-on: macos-26
+    timeout-minutes: 40
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install frozen dependencies
+        run: npm ci
+      - name: Web build, iOS icons, Capacitor sync
+        run: npm run ios
+      - name: Build the unsigned .ipa
+        working-directory: ios/App
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          xcodebuild -project App.xcodeproj -scheme App -configuration Release \
+            -destination 'generic/platform=iOS' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" \
+            -quiet build
+          rm -rf Payload && mkdir Payload
+          cp -R build/Build/Products/Release-iphoneos/App.app Payload/
+          zip -qry ../../cylinder-protection.ipa Payload
+          ls -l ../../cylinder-protection.ipa
+      - name: Keep the .ipa
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: cylinder-protection-ipa
+          path: cylinder-protection.ipa
+          if-no-files-found: error
+          retention-days: 30
+      - name: Attach the .ipa to the latest pre-release
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload latest cylinder-protection.ipa --clobber --repo "$GITHUB_REPOSITORY"

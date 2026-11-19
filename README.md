@@ -1,15 +1,48 @@
 # Cylinder Protection
 
-A fantasy tower-defense game for Android (and the browser), set in **Moonwell Glade**: a moonlit fey
+A fantasy tower-defense game for Android, iPhone/iPad and the browser, set in **Moonwell Glade**: a moonlit fey
 realm where the Blight creeps along the old moon-roads to snuff out the **Moonwell**, the shining
 stone cylinder at the end of every road. Plant elemental blooms, spread the Moonwell's glow, and
 hold the line until dawn.
 
-Built with **TypeScript + Phaser 4 + Vite**, packaged for Android with **Capacitor 8**.
+Built with **TypeScript + Phaser 4 + Vite**, packaged for Android and iOS with **Capacitor 8**, and
+installable as an offline web app.
 All art and sound are generated in code — there are no image or audio asset files. Sprites are painted
 with Canvas2D (gradients, outlines, highlights) at the device's real pixel density, so they stay sharp on
 high-resolution phone screens, and every creature has walk and attack animations. The display font
 (Cinzel, OFL) is bundled so the app works offline.
+
+## Play it
+
+**iPhone / iPad (recommended) and any browser: the web app.**
+<https://danielgebhardt.github.io/Cylinder-Protection/>
+
+- **iPhone/iPad:** open the link in **Safari**, tap **Share → Add to Home Screen**, then always start the
+  game from that **home-screen icon**. It runs full screen and works offline after the first launch.
+  Don't play in a Safari tab: Safari keeps the tab's progress separate from the icon's.
+- **Android (Chrome):** open the link and choose **Install app** (or ⋮ → Add to Home screen).
+- New versions arrive by themselves: start the game while online and the update shows on the next launch.
+- Turn a phone sideways; the game is landscape only.
+
+**Android app:** open this link on the phone, then open the downloaded file and allow installs from
+your browser when asked. No GitHub sign-in needed:
+<https://github.com/danielgebhardt/Cylinder-Protection/releases/download/latest/cylinder-protection.apk>
+A newer APK installs over the old one and keeps your progress.
+
+**iOS app (sideload, for tinkerers):** an unsigned build, re-signed with your own free Apple ID when you
+install it: <https://github.com/danielgebhardt/Cylinder-Protection/releases/download/latest/cylinder-protection.ipa>
+
+- **AltStore** (or SideStore): install AltStore with AltServer on a Mac/PC (<https://altstore.io>), download
+  the .ipa on the iPhone, open it in AltStore (My Apps → +) and sign in with your Apple ID.
+- **Xcode** (Mac): build it yourself instead of using the .ipa. `npm ci && npm run ios && npm run ios:open`,
+  then in Xcode select the **App** target → Signing & Capabilities → Team = your **Personal Team**
+  (change the bundle identifier if Xcode says it's taken), plug in the iPhone and press Run. On the
+  phone, turn on **Settings → Privacy & Security → Developer Mode** (it restarts) and trust your
+  developer profile under Settings → General → VPN & Device Management.
+- Limits of a free Apple ID: the app **expires after 7 days** (AltStore refreshes it while AltServer is
+  running on the same Wi-Fi; with Xcode, press Run again), and **only 3 sideloaded apps** can be
+  active at once. Reinstalling over an expired copy keeps your progress. The web app has none of these
+  limits, which is why it's the recommended way on iPhone/iPad.
 
 ## How it plays
 
@@ -61,14 +94,16 @@ Court, each with its own night weather.
 - Tap any creature to see its armor, magic resistance and how to beat it.
 
 Lose 2 or fewer petals for 3 stars. On Android it's landscape-locked and fullscreen, the back
-button pauses, and it auto-pauses in the background.
+button pauses, and it auto-pauses in the background. The iOS app is landscape-only and full screen
+too; in the web app a phone held upright shows "turn your device sideways" and pauses the game.
 
 ## Development
 
 ```bash
 npm install
 npm run dev          # http://localhost:5173 (also reachable from your phone on the same network)
-npm run build        # typecheck + production bundle in dist/
+npm run build        # typecheck + production bundle in dist/ (also the installable web app)
+node tools/webapp-check.cjs   # after a build: installable, service worker, boots offline (needs Playwright)
 ```
 
 Handy URL parameters while developing:
@@ -85,23 +120,47 @@ npm run cap:open     # open in Android Studio (then Run ▶)
 npm run android      # build, sync and run on a connected device/emulator
 ```
 
-**Install on a phone:** open this link on Android, then open the downloaded file and allow installs from
-your browser when asked — no GitHub sign-in needed:
-<https://github.com/danielgebhardt/Cylinder-Protection/releases/download/latest/cylinder-protection.apk>
-
-The **Android app** workflow rebuilds that APK on every push to `main` (and keeps it as the
-`cylinder-protection-apk` artifact). Every build is signed with the committed sideload key
+The **Android, iOS and web app** workflow (`.github/workflows/android.yml`) rebuilds the APK on every
+push to `main` (and keeps it as the `cylinder-protection-apk` artifact). Every build is signed with the committed sideload key
 (`android/app/sideload.keystore`), so a new APK installs over the old one and keeps your progress.
 That key is only for sideloading, never for a Play Store release.
 
 App icon and splash sources live in `assets/`; regenerate the Android resources with
-`npx capacitor-assets generate --android`.
+`npx capacitor-assets generate --android`. The iOS app icon and launch logo (`scripts/icon.ts`) and the
+web app icons (Vite build) are rasterised from the same `assets/` PNGs at build time and not committed.
+
+## iOS
+
+```bash
+npm run ios          # web build + iOS icons + sync into ios/ (works on Linux too)
+npm run ios:open     # open in Xcode (Mac), then Run
+```
+
+The same workflow builds an unsigned `.ipa` on a macOS runner on **every push** (artifact
+`cylinder-protection-ipa`), and on `main` attaches it to the `latest` release next to the APK.
+The Xcode project in `ios/` is committed (Swift Package Manager, no CocoaPods); the copied web
+bundle (`ios/App/App/public`), `capacitor.config.json` and the icon PNGs are generated.
+
+## Web app (GitHub Pages)
+
+On `main` the workflow also deploys `dist/` to GitHub Pages. `scripts/lib/webapp.ts` (a Vite plugin)
+adds `manifest.webmanifest`, the icons and `sw.js`, a service worker that precaches the whole game:
+page loads try the network first (4 s timeout, then the cached copy) so updates show on the next
+launch, and the content-hashed files come from the cache. Progress lives in the browser's
+`localStorage`; the game asks the browser to keep it (`navigator.storage.persist()`).
+Pages must be set to **Settings → Pages → Source: GitHub Actions** (one-time).
 
 ## Project layout
 
 ```
+scripts/
+  icon.ts              iOS app icon + launch logo (from assets/)
+  lib/iconart.ts       PNG decode/resample/encode for the iOS and web icons
+  lib/webapp.ts        Vite plugin: web app manifest, icons, service worker
+tools/                 Playwright playtest scripts (screenshots, battles, balance sim, web app check)
+android/  ios/         Capacitor native projects
 src/
-  main.ts              Phaser game config + Capacitor back-button / lifecycle hooks
+  main.ts              Phaser game config + Capacitor back-button / lifecycle hooks, service worker
   config.ts            screen size, depth layers, HUD zones
   audio.ts             synthesized WebAudio sound effects
   save.ts              localStorage progress (stars, seen enemies, mute)
