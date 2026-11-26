@@ -1,5 +1,7 @@
 # Cylinder Protection
 
+> Source of truth: the home lab's Forgejo. This GitHub repo is a read-only copy, updated within minutes; don't push or open PRs here.
+
 A fantasy tower-defense game for Android, iPhone/iPad and the browser, set in **Moonwell Glade**: a moonlit fey
 realm where the Blight creeps along the old moon-roads to snuff out the **Moonwell**, the shining
 stone cylinder at the end of every road. Plant elemental blooms, spread the Moonwell's glow, and
